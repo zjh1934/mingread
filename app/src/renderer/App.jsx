@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Snackbar, Alert, Button, IconButton, Popover, Badge, CircularProgress, Tooltip, Typography } from '@mui/material';
+import { Box, Stack, Slider, Snackbar, Alert, Button, IconButton, Popover, Badge, CircularProgress, Tooltip, Typography } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import TimerIcon from '@mui/icons-material/Timer';
 import TuneIcon from '@mui/icons-material/Tune';
 import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 // v2.4.0 IA：无播放态下的「朗读下方文本」入口图标
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+// v2.4.0 IA：次级操作条里的常驻语速控件（± 步进）
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 
 import { useSettings } from './store/settingsStore';
 import { useStreamingPlayback } from './hooks/useStreamingPlayback';
@@ -28,6 +31,9 @@ import HeroStatus from './components/HeroStatus';
 
 const SAMPLE_TEXT =
   '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
+
+/** 语速步进：限制在 [-50, 100]、按 10 一档对齐（与 Controls / TuningPanel 的口径一致） */
+const clampRate = (v) => Math.max(-50, Math.min(100, Math.round(Number(v) / 10) * 10));
 
 function bridge() {
   return typeof window !== 'undefined' ? window.langdu : null;
@@ -840,15 +846,65 @@ export default function App() {
             >
               音色 · {voiceLabel}
             </Button>
-            <Button
-              variant="outlined"
-              startIcon={exporting ? <CircularProgress size={14} /> : <FileDownloadIcon />}
-              disabled={exporting}
-              onClick={handleExport}
-              sx={{ height: su(44) }}
-            >
-              {exporting ? '导出中…' : '导出 MP3'}
-            </Button>
+
+            {/* v2.4.0 IA：语速常驻。播放器收起后它曾是唯一入口 —— 收起来就调不了语速，
+                这是上一轮引入的功能缺口，必须在次级操作条补回（高频、且需要看到当前值） */}
+            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ ml: 0.25 }}>
+              <Typography sx={{ fontSize: fs(13), color: 'text.secondary', fontWeight: 600 }}>
+                语速
+              </Typography>
+              <IconButton
+                onClick={() => setSettings({ rate: clampRate(rate - 10) })}
+                aria-label="语速放慢"
+                sx={{ width: su(40), height: su(40), border: '1px solid', borderColor: 'divider' }}
+              >
+                <RemoveIcon sx={{ fontSize: fs(18) }} />
+              </IconButton>
+              <Slider
+                min={-50}
+                max={100}
+                step={10}
+                value={Math.max(-50, Math.min(100, Number(rate) || 0))}
+                onChange={(_, v) => setSettings({ rate: v })}
+                aria-label="语速"
+                valueLabelDisplay="auto"
+                sx={{ width: su(96), mx: 0.25 }}
+              />
+              <IconButton
+                onClick={() => setSettings({ rate: clampRate(rate + 10) })}
+                aria-label="语速加快"
+                sx={{ width: su(40), height: su(40), border: '1px solid', borderColor: 'divider' }}
+              >
+                <AddIcon sx={{ fontSize: fs(18) }} />
+              </IconButton>
+              <Typography
+                sx={{
+                  fontSize: fs(13),
+                  minWidth: su(34),
+                  fontVariantNumeric: 'tabular-nums',
+                  fontWeight: 600,
+                }}
+              >
+                {rate > 0 ? `+${rate}` : rate}
+              </Typography>
+            </Stack>
+
+            <Box sx={{ flex: 1 }} />
+
+            {/* 低频纯动作降级为图标（导出是「一次性动作」，不需要一直看到当前值），
+                音色/语速保留按钮形态（有状态、需要看值） */}
+            <Tooltip title="导出 MP3（把当前文本合成成音频文件）">
+              <span>
+                <IconButton
+                  disabled={exporting}
+                  onClick={handleExport}
+                  aria-label="导出 MP3"
+                  sx={{ width: su(44), height: su(44) }}
+                >
+                  {exporting ? <CircularProgress size={14} /> : <FileDownloadIcon sx={{ fontSize: fs(20) }} />}
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title="定时关闭">
               <span>
                 <IconButton
@@ -873,10 +929,6 @@ export default function App() {
                 </IconButton>
               </span>
             </Tooltip>
-            <Box sx={{ flex: 1 }} />
-            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              在任意程序选中文字后按 F1，随时朗读
-            </Typography>
           </Box>
 
           {/* ③ 朗读文本：默认收起一行，导入为主入口 */}
