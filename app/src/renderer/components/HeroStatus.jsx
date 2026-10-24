@@ -82,7 +82,7 @@ export default function HeroStatus({
             )}
             {ok && (
               <Typography sx={{ fontSize: fs(14), color: 'text.secondary' }}>
-                {hover ? '· 停住约 0.7 秒，不用选中' : '· 不用切回这个窗口'}
+                {hover ? '· 停住约 0.6 秒，不用选中' : '· 不用切回这个窗口'}
               </Typography>
             )}
           </Stack>

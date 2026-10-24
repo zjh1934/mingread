@@ -58,6 +58,9 @@ function defaults() {
     readMode: 'hotkey',
     // 悬停停多久触发（毫秒）。650ms 是「明显停住」但又不让人觉得迟钝的折中。
     hoverDelayMs: 650,
+    // v3.2.1 悬停「详细度」，对齐 macOS Hover Text 的 Low/Medium/High：
+    //   low 只读指针所在那一句 / medium 读整段（默认）/ high 读本段+后续
+    hoverDetail: 'medium',
     // 桌面悬浮球（鼠标入口），默认开
     floatBallEnabled: true,
     // 悬浮球位置 {x,y} | null（null = 默认右下角）

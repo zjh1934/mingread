@@ -12,6 +12,7 @@
 const { screen } = require('electron');
 const { OcrHost } = require('./ocrHost');
 const { HoverReader } = require('./hoverReader');
+const highlight = require('./highlight');
 const a11y = require('../a11yFeedback');
 
 let _ocr = null;
@@ -20,6 +21,7 @@ let _getWindow = null;
 let _isBusy = null;
 let _mode = 'hotkey';
 let _prewarmed = false;
+let _detail = 'medium';
 
 function _send(channel, payload) {
   try {
@@ -83,6 +85,17 @@ function getMode() {
   return _mode;
 }
 
+/** 详细度：low 句 / medium 段（默认）/ high 段+后续。对齐 macOS Hover Text 的 Low/Medium/High。 */
+function setDetail(level) {
+  _detail = level === 'low' || level === 'high' ? level : 'medium';
+  if (_reader) _reader.setDetail(_detail);
+  return _detail;
+}
+
+function getDetail() {
+  return _detail;
+}
+
 /**
  * 切换朗读方式
  * @param {'hotkey'|'hover'} mode
@@ -98,7 +111,16 @@ function setMode(mode) {
         ocr: _ocr,
         isBusy: () => (_isBusy ? _isBusy() : false),
         isSelfPoint: _isSelfPoint,
+        config: { detail: _detail },
         onText: (text, meta) => {
+          // 先画高亮再朗读：让用户「先看见读的是哪一块」，再听到声音。
+          // 这是 macOS element highlight 的对齐点，也是低视力用户建立
+          // 「声音 ↔ 版面位置」对应关系的唯一手段。
+          try {
+            if (meta && meta.rects && meta.rects.length) highlight.show(meta.rects);
+          } catch (e) {
+            /* 高亮失败不影响朗读 */
+          }
           const delivered = _send('hover:read', { text, meta });
           if (!delivered) {
             _announce('悬停读到了文字，但主窗口不可用，这次没有朗读。', 'high');
@@ -114,6 +136,11 @@ function setMode(mode) {
       _reader.stop();
       console.log('[hover] 悬停朗读已停止');
     }
+    try {
+      highlight.hide();
+    } catch (e) {
+      /* 忽略 */
+    }
   }
   return _mode;
 }
@@ -123,6 +150,7 @@ function getStats() {
     mode: _mode,
     prewarmed: _prewarmed,
     ocrLang: _ocr ? _ocr.lang : '',
+    detail: _detail,
     reader: _reader ? _reader.stats : null,
   };
 }
@@ -135,6 +163,11 @@ function dispose() {
   if (_ocr) {
     _ocr.dispose();
     _ocr = null;
+  }
+  try {
+    highlight.dispose();
+  } catch (e) {
+    /* 忽略 */
   }
   _prewarmed = false;
 }

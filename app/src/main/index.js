@@ -554,6 +554,7 @@ function bootstrap() {
     );
     // v3.2 悬停朗读：先 init 注入依赖，再按当前设置切模式（hover 才启动 OCR 宿主）
     hoverService.init(getMainWindow, () => !!(state.playback && state.playback.isPlaying));
+    hoverService.setDetail(initialSettings.hoverDetail || 'medium');
     hoverService.setMode(initialSettings.readMode === 'hover' ? 'hover' : 'hotkey');
     state.hotkeyRef = hotkeyRef;
     state.hotkeyOk = !!(hotkeyRef && typeof hotkeyRef.isRegistered === 'function' && hotkeyRef.isRegistered());

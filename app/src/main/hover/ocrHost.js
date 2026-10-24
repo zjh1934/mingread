@@ -115,7 +115,14 @@ while ($true) {
         if ([int]$b.Y -lt $top) { $top = [int]$b.Y }
         if (([int]$b.Y + [int]$b.Height) -gt $bot) { $bot = [int]$b.Y + [int]$b.Height }
       }
-      $items += ('{"t":' + (ConvertTo-Json -InputObject $ln.Text -Compress) + ',"y":' + $top + ',"h":' + ($bot - $top) + '}')
+      $lft = [int]($ws[0].BoundingRect.X)
+      $rgt = $lft + [int]($ws[0].BoundingRect.Width)
+      foreach ($wd in $ws) {
+        $bb = $wd.BoundingRect
+        if ([int]$bb.X -lt $lft) { $lft = [int]$bb.X }
+        if (([int]$bb.X + [int]$bb.Width) -gt $rgt) { $rgt = [int]$bb.X + [int]$bb.Width }
+      }
+      $items += ('{"t":' + (ConvertTo-Json -InputObject $ln.Text -Compress) + ',"y":' + $top + ',"h":' + ($bot - $top) + ',"x":' + $lft + ',"w":' + ($rgt - $lft) + '}')
     }
     $payload = '{"id":' + $id + ',"ok":true,"ms":' + [int]([DateTime]::Now - $t0).TotalMilliseconds + ',"lines":[' + ($items -join ',') + ']}'
     $ok = $true

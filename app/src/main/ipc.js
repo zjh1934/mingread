@@ -74,6 +74,7 @@ function systemSettingsSnapshot() {
     // v3.2 朗读方式（二选一）
     readMode: s.readMode === 'hover' ? 'hover' : 'hotkey',
     hoverDelayMs: Number(s.hoverDelayMs) || 650,
+    hoverDetail: s.hoverDetail === 'low' || s.hoverDetail === 'high' ? s.hoverDetail : 'medium',
   };
 }
 
@@ -139,6 +140,11 @@ function saveSystemSettings(patch) {
     if ('hoverDelayMs' in p) {
       const v = Math.max(200, Math.min(3000, Number(p.hoverDelayMs) || 650));
       persist.hoverDelayMs = v;
+    }
+    if ('hoverDetail' in p) {
+      const lv = p.hoverDetail === 'low' || p.hoverDetail === 'high' ? p.hoverDetail : 'medium';
+      persist.hoverDetail = lv;
+      hoverService.setDetail(lv);
     }
     if ('floatBallEnabled' in p) {
       persist.floatBallEnabled = !!p.floatBallEnabled;
