@@ -83,7 +83,13 @@ app.whenReady().then(async () => {
   check('B1', '2x 与 4x 画面不同（真的在放大）', d24 > 0.02, `lenDiff=${(d24 * 100).toFixed(1)}%`);
   const d02 = diffRatio(s0, s2);
   check('B2', '1x 与 2x 画面不同', d02 > 0.02, `lenDiff=${(d02 * 100).toFixed(1)}%`);
-  if (s2) check('B3', '截图非空', s2.png.length > 20000, `${(s2.png.length / 1024).toFixed(0)}KB ${JSON.stringify(s2.size)}`);
+  // 注意：不能用文件体积判断「截图非空」——纯色桌面下 1920x1080 的 PNG 只有 10KB，
+  // 会误报失败（本机就会）。「画面是否真的在变」由 B1/B2 的逐像素差异保证，
+  // 这里只确认拿到的是整屏截图而不是 0x0 空图。
+  if (s2) {
+    const sz = s2.size || {};
+    check('B3', '截图尺寸为整屏（不是空图）', sz.width >= 800 && sz.height >= 600, `${sz.width}x${sz.height} ${(s2.png.length / 1024).toFixed(0)}KB`);
+  }
 
   // 退出
   zc.reset();

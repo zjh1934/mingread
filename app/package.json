@@ -1,6 +1,6 @@
 {
   "name": "mingread",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "明读 —— 面向低视力人群的 Windows 无障碍辅助工具：屏幕放大 + 高对比 + 划词朗读（LensZoom 缩放 · 选中即读 F1 · 本地 NVSA 优先 / Edge 在线兜底的微软神经语音）",
   "productName": "明读",
   "author": "zjh1934",

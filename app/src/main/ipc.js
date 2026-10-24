@@ -14,6 +14,7 @@ const voiceSources = require('./voiceSources');
 const { startClipboardMonitor } = require('./clipboardMonitor');
 const floatBall = require('./floatBall');
 const zoomController = require('./zoomController');
+const cursorSize = require('./cursorSize');
 
 function b64(u8) {
   return Buffer.from(u8).toString('base64');
@@ -446,6 +447,35 @@ function registerIpc(getWindow, state) {
     } catch (e) {
       return false;
     }
+  });
+
+  // ---- v3.1 系统鼠标指针设置（只读当前值 + 打开系统设置页）----
+  // 注意：这里不接受渲染层传进来的 URI。URI 由主进程按平台决定，
+  // 免得把一个「打开设置」通道变成任意协议启动器。
+  ipcMain.handle('system:cursorSize:get', () => cursorSize.getState());
+
+  ipcMain.handle('system:cursorSize:openSettings', async () => {
+    const t = cursorSize.settingsTarget();
+    if (t.uri) {
+      try {
+        await shell.openExternal(t.uri);
+        return { ok: true, message: t.message, via: t.uri };
+      } catch (e) {
+        // 极简系统可能没注册 ms-settings 协议，落到兜底入口
+      }
+    }
+    if (t.fallback) {
+      try {
+        // eslint-disable-next-line global-require
+        const { spawn } = require('child_process');
+        const parts = t.fallback.split(' ').filter(Boolean);
+        spawn(parts[0], parts.slice(1), { detached: true, stdio: 'ignore', windowsHide: false }).unref();
+        return { ok: true, message: t.message, via: t.fallback };
+      } catch (e) {
+        return { ok: false, message: `打不开系统设置：${e && e.message ? e.message : e}` };
+      }
+    }
+    return { ok: false, message: '当前系统不支持一键打开指针设置' };
   });
 
   // ---- v2.2 系统设置（settings.json 权威源）----

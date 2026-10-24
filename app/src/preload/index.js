@@ -6,6 +6,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 const api = {
   appInfo: () => ipcRenderer.invoke('app:info'),
 
+  // v3.1 系统鼠标指针设置入口。
+  // 低视力用户找不到「设置 → 轻松使用 → 鼠标指针」这条路，这里给一个一键直达。
+  // 只读当前值 + 打开系统设置页，程序自身不改任何系统设置。
+  cursorSize: {
+    get: () => ipcRenderer.invoke('system:cursorSize:get'),
+    openSettings: () => ipcRenderer.invoke('system:cursorSize:openSettings'),
+  },
+
   // W-WIN1 无边框窗口控制：顶栏右侧自绘的三个键（最小化/最大化-还原/关闭）。
   // 主进程用 BrowserWindow.fromWebContents(e.sender) 定位窗口，只作用于调用方窗口；
   // closeWindow 仅关闭该窗口，不退出应用（托盘常驻逻辑不受影响）。
@@ -161,6 +169,9 @@ const api = {
   },
 };
 
+// 历史桥接名（5 处渲染层调用仍在用，改名成本 > 收益，保留为别名）；
+// 新代码请用 window.mingread —— 产品名已是「明读」，旧名不该继续扩散。
 contextBridge.exposeInMainWorld('langdu', api);
+contextBridge.exposeInMainWorld('mingread', api);
 // 同一份 a11y 契约另挂到 window.api，便于 renderer 侧按 window.api.a11y.* 调用
 contextBridge.exposeInMainWorld('api', { a11y: api.a11y });

@@ -92,6 +92,8 @@ node node_modules/electron-builder/out/cli/cli.js --win nsis zip   # 打包
 - 浅色 / 深色 / 高对比度三套主题
 - 所有可点元素 ≥ 44px，键盘全程可达
 - 状态变化有语音播报（可关）
+- **找不到鼠标指针？** 主页有「打开指针大小设置」，一键跳到系统那个能实时预览的调节页
+- 屏幕放大出问题时会**用语音说明原因**（不是只写日志），并给出仍可用的替代按键
 
 <p align="center">
   <img src="screenshots/dark.png" width="49%" alt="深色主题">

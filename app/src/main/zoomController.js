@@ -24,6 +24,28 @@ const { BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcut } = requ
 // v2.4.0：系统放大后端。可用时完全替代「覆盖层抓屏 + CSS transform」那条路，
 // 从根上消掉旧方案的画面伪影（焦点框/十字线/描边在 8x 下的网格）。
 const magBackend = require('./zoom/magBackend');
+// v3.1：放大出问题必须「说出来」。低视力用户看不到画面异常的原因，
+// 光写日志等于没说——他们不会去翻 %APPDATA% 里的文本。
+const a11y = require('./a11yFeedback');
+
+// mag 后端不可用的原因码（'' = 正常）：
+//   forced-env / forced-setting = 用户主动要旧方案，不算故障，不播报
+//   dll-missing / create-failed / exception = 被迫降级，必须播报一次
+let magFallbackReason = '';
+// 降级提示只在本次运行里说一次：每次滚轮都念一遍会变成噪音
+let degradeAnnounced = false;
+// 输入后端整体不可用（滚轮 + 快捷键都没起来）也只说一次
+let inputDeadAnnounced = false;
+
+/** 播报一条放大相关的问题。绝不抛出：播报失败不能影响放大本身。 */
+function announceZoomIssue(text, priority) {
+  try {
+    const p = a11y.announce({ text, priority: priority || 'normal' });
+    if (p && typeof p.then === 'function') p.catch(() => {});
+  } catch (e) {
+    /* 静默：TTS 不可用时放大仍要能用 */
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 配置默认值（并入 明读 的 settingsStore 默认值即可）
@@ -396,6 +418,19 @@ function createZoomController(opts) {
     }
     sendActivate(); // F10
     notifyRenderer();
+
+    // v3.1：被迫降级时必须说明，否则用户只觉得「放大效果很差」却不知道为什么。
+    // 用户主动选旧方案（forced-*）不播报——他知道自己在做什么。
+    if (
+      state.renderBackend === 'overlay' &&
+      magFallbackReason &&
+      magFallbackReason !== 'forced-env' &&
+      magFallbackReason !== 'forced-setting' &&
+      !degradeAnnounced
+    ) {
+      degradeAnnounced = true;
+      announceZoomIssue('屏幕放大已切换到兼容模式，画面可能有重影。功能仍可正常使用。', 'normal');
+    }
   }
 
   /** 尝试切到系统放大后端。返回 false 时调用方回退覆盖层。
@@ -406,21 +441,25 @@ function createZoomController(opts) {
     // 用来确认「mag 不可用的机器上放大仍然可用」这条兜底路径没坏。
     if (process.env.MINGREAD_ZOOM_BACKEND === 'overlay') {
       console.log('[zoom] renderBackend=overlay（环境变量强制）');
+      magFallbackReason = 'forced-env';
       return false;
     }
     if (s.zoomBackend === 'overlay') {
       console.log('[zoom] renderBackend=overlay（设置里强制旧方案）');
+      magFallbackReason = 'forced-setting';
       return false;
     }
     if (!magBackend.isAvailable()) {
       const info = magBackend.getInfo();
       console.warn(`[zoom] mag 不可用，回退覆盖层：${info.reason || '未知原因'}`);
+      magFallbackReason = 'dll-missing';
       return false;
     }
     try {
       const d = screen.getDisplayNearestPoint(state.cursor);
       if (!magBackend.createForDisplay(d)) {
         console.warn(`[zoom] mag 建窗失败，回退覆盖层：${magBackend.getInfo().reason || ''}`);
+        magFallbackReason = 'create-failed';
         return false;
       }
       state.displayId = d.id;
@@ -428,6 +467,7 @@ function createZoomController(opts) {
       return true;
     } catch (e) {
       console.warn('[zoom] mag 启动异常，回退覆盖层：', e && e.message);
+      magFallbackReason = 'exception';
       return false;
     }
   }
@@ -988,6 +1028,26 @@ function createZoomController(opts) {
     console.log(`[zoom] 输入后端: backend=${state.backend} trigger=${state.trigger} zoomHotkeyOk=${state.zoomHotkeyOk}`);
     startLoop();
     registerIpc();
+
+    // v3.1：输入链路挂了必须说出来。「按了 Alt+滚轮没反应」是所有故障里
+    // 最难自行诊断的一种——用户无法判断是没按对、被别的软件抢了、还是功能坏了。
+    // 分两种说清楚，并给出仍可用的替代操作（不要只报错不给出路）。
+    if (state.backend === 'none' || state.trigger === 'none') {
+      const noWheel = state.backend === 'none';
+      const noKey = state.trigger === 'none';
+      const text =
+        noWheel && noKey
+          ? '屏幕放大无法使用：滚轮监听和快捷键都没有启动成功。请重开程序再试。'
+          : noWheel
+            ? '按住 Alt 滚动滚轮没有生效：滚轮监听没能启动。可以改用 Ctrl 加 Alt 加加号放大。'
+            : '放大快捷键没有启动成功，可以按住 Alt 滚动滚轮放大。';
+      // 延迟到首屏稳定后再播，避免和启动提示抢话
+      setTimeout(() => {
+        if (inputDeadAnnounced) return;
+        inputDeadAnnounced = true;
+        announceZoomIssue(text, 'high');
+      }, 4000);
+    }
 
     // v3.0.0：启动后（3s，不抢首屏）探测放大后端并打一行明确日志。
     // 为什么需要它：曾出现「开发环境 mag 可用、安装版退回覆盖层」而毫无提示，

@@ -30,6 +30,7 @@ import VoiceDeployGate from './components/VoiceDeployGate';
 import HeroStatus from './components/HeroStatus';
 // v2.4.0 首屏补白：快捷键速查卡（默认收起一行，展开为热键表）
 import ShortcutGuide from './components/ShortcutGuide';
+import SupportCard from './components/SupportCard';
 
 const SAMPLE_TEXT =
   '明读 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
@@ -955,6 +956,8 @@ export default function App() {
             open={editorOpen}
             onToggle={toggleEditor}
           />
+          {/* ⑤ 辅助与联系：指针设置入口 + 微信二维码（主流程之外，放最下方不抢注意力） */}
+          <SupportCard />
           <ShortcutGuide />
         </Box>
       </Box>
