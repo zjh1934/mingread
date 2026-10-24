@@ -23,9 +23,22 @@ const SAPI_VOICES = [
     keywords: ['yunxi', '云希'],
     desc: '本地离线神经语音 · 男声',
   },
+  {
+    // 本地兜底层：NVSA 的神经语音没装时，用系统内置中文语音顶上。
+    // 实测 Microsoft Huihui Desktop 走常驻通道合成 18~43ms（预热 547ms），
+    // 端到端 ≈90ms —— 音质是旧版机械音，但「立刻出声」比音质更符合低视力用户诉求。
+    // keywords 仅供 matchesVoice 判断，主循环会跳过它（fallbackOnly），由 pickSapiVoices 末尾单独挑。
+    key: 'system',
+    id: 'sapi:system',
+    name: '系统语音',
+    gender: 'female',
+    keywords: ['huihui', 'chinese', '中文'],
+    desc: '系统内置语音 · 音质一般，但几乎零延迟（离线语音没装好时自动使用）',
+    fallbackOnly: true,
+  },
 ];
 
-const VOICE_KEYS = ['xiaoxiao', 'yunxi'];
+const VOICE_KEYS = ['xiaoxiao', 'yunxi', 'system'];
 const DEFAULT_KEY = 'xiaoxiao';
 
 /**
@@ -68,12 +81,20 @@ function pickSapiVoices(installedNames) {
   const names = Array.isArray(installedNames) ? installedNames : [];
   const out = [];
   for (const def of SAPI_VOICES) {
+    if (def.fallbackOnly) continue; // 兜底层在下面单独挑，不参与主循环
     const hits = names.filter((n) => matchesVoice(n, def));
     if (!hits.length) continue;
     // NVSA 注册的微软自然语音名通常含 "Natural"；优先取之，避免选到同名的旧 SAPI5 音库
     const natural = hits.find((n) => /natural/i.test(n)) || hits[0];
-    out.push({ key: def.key, name: natural });
+    out.push({ key: def.key, name: natural, id: def.id, kind: 'nvsa' });
   }
+  if (out.length) return out;
+
+  // NVSA（晓晓/云希）没装 → 退到系统内置中文语音，保证「本地零延迟」这条路始终有声音。
+  // 这是有意的降级：音质让位于响应速度，且必须让上层知道（kind='system'），不许静默。
+  const sys = names.find((n) => /huihui|chinese|中文|zh-cn|zh_cn/i.test(String(n || '')));
+  const def = SAPI_VOICES.find((d) => d.key === 'system');
+  if (sys) out.push({ key: 'system', name: sys, id: def ? def.id : 'sapi:system', kind: 'system' });
   return out;
 }
 

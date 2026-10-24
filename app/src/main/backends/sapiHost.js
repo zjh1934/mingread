@@ -104,8 +104,25 @@ function Invoke-Synth($req) {
   if (-not $spoke) { $synth.Speak($text) }
   $bytes = $stream.ToArray()
   try { $stream.Dispose() } catch { }
-  $fmt = $synth.Voice.AudioFormat
-  Write-Frame @{ id = $rid; ok = $true; cmd = 'synth'; audioB64 = ([Convert]::ToBase64String($bytes)); sampleRate = [int]$fmt.SamplesPerSecond; bitsPerSample = [int]$fmt.BitsPerSample; channels = [int]$fmt.ChannelCount }
+  # 格式优先从 WAV 头解析：$synth.Voice.AudioFormat 在部分系统语音（实测
+  # Microsoft Huihui Desktop）拿不到值 → sampleRate 上报 0 → 上层按错误采样率解释
+  # → 播放变调。WAV 头是权威来源，offset 22=声道, 24=采样率, 34=位深。
+  $sr = 0; $bits = 16; $ch = 1
+  if ($bytes.Length -gt 44 -and $bytes[0] -eq 0x52 -and $bytes[1] -eq 0x49) {
+    $sr = [BitConverter]::ToInt32($bytes, 24)
+    $ch = [BitConverter]::ToInt16($bytes, 22)
+    $bits = [BitConverter]::ToInt16($bytes, 34)
+  }
+  if ($sr -le 0) {
+    try {
+      $fmt = $synth.Voice.AudioFormat
+      $sr = [int]$fmt.SamplesPerSecond
+      $bits = [int]$fmt.BitsPerSample
+      $ch = [int]$fmt.ChannelCount
+    } catch { }
+  }
+  if ($sr -le 0) { $sr = 16000 }
+  Write-Frame @{ id = $rid; ok = $true; cmd = 'synth'; audioB64 = ([Convert]::ToBase64String($bytes)); sampleRate = [int]$sr; bitsPerSample = [int]$bits; channels = [int]$ch }
 }
 
 Write-Frame @{ id = 0; ok = $true; cmd = 'ready'; ps = $PSVersionTable.PSVersion.ToString() }

@@ -296,12 +296,18 @@ class TtsBridge {
     return {
       id: eng.id,
       kind: eng.kind,
-      label: eng.label,
+      label:
+        eng.kind === 'local' && lp && lp.kind === 'system'
+          ? '系统内置语音（离线兜底）'
+          : eng.label,
       available,
       verificationOnly: eng.id === 'espeak',
       reason: available ? null : lp && lp.reason,
       message: available ? null : lp && lp.message,
       voices: available && lp && lp.voices ? lp.voices : [],
+      // v2.4.0：本地「系统语音兜底」等需要提示但不阻断的状态（可用 ≠ 理想）
+      notice: available && lp && lp.notice ? lp.notice : null,
+      localKind: available && lp && lp.kind ? lp.kind : null,
       installedCount: lp && lp.installed ? lp.installed.length : null,
       detail: lp && lp.detail ? lp.detail : null,
       info: typeof eng.getInfo === 'function' ? eng.getInfo() : null,
@@ -352,9 +358,12 @@ class TtsBridge {
       verificationOnly: !!v.verificationOnly,
     }));
     const activeState = es.engines.find((s) => s.id === es.active) || null;
+    const isSystemVoice = !!(activeState && activeState.localKind === 'system');
     const detail =
       es.active === 'sapi'
-        ? '本地离线合成 · 无需网络 · 晓晓 / 云希'
+        ? isSystemVoice
+          ? '本机内置语音 · 无需网络、几乎没有延迟 · 音质一般（装好离线语音后自动换成晓晓 / 云希）'
+          : '本地离线合成 · 无需网络 · 晓晓 / 云希'
         : es.active === 'espeak'
           ? `espeak-ng 验证专用合成（沙箱/CI）· 机器人音色${es.fallback ? `（${es.fallback.message}）` : ''}`
           : es.active === 'edge'

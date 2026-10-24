@@ -70,8 +70,11 @@ function handle(line) {
   }
   if (cmd === 'voices') {
     const names = process.env.MOCK_NO_VOICES === '1' ? [] : VOICES;
-    // 故意混入一个不相关语音，验证 pickSapiVoices 的筛选
-    const all = names.concat(['Microsoft Huihui - Chinese (Simplified)']);
+    // 故意混入一个不相关语音，验证 pickSapiVoices 的筛选。
+    // v2.4.0 起它是「系统语音兜底」的来源（NVSA 没装时本地仍可用），
+    // 所以要测「连它都没有」的真降级路径时，用 MOCK_NO_ANY_VOICE=1 排除掉。
+    const extra = process.env.MOCK_NO_ANY_VOICE === '1' ? [] : ['Microsoft Huihui - Chinese (Simplified)'];
+    const all = names.concat(extra);
     frame({
       id,
       ok: true,

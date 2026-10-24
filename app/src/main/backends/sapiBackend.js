@@ -217,15 +217,21 @@ class SapiBackend {
       return {
         available: false,
         reason: LOCAL_REASON.VOICE_NOT_REGISTERED,
-        message: `${LOCAL_REASON_TEXT[LOCAL_REASON.VOICE_NOT_REGISTERED]}（系统语音共 ${names.length} 个，未见到晓晓/云希）。请在设置里点「一键安装离线语音」，或运行 scripts/register-nvsa.ps1。`,
+        message: `${LOCAL_REASON_TEXT[LOCAL_REASON.VOICE_NOT_REGISTERED]}（系统语音共 ${names.length} 个，既没有晓晓/云希，也没有可用的中文系统语音）。请在设置里点「一键安装离线语音」，或运行 scripts/register-nvsa.ps1。`,
         installed: names,
         detail: { installedCount: names.length, sample: names.slice(0, 8), nvsaConfig: readNvsaConfig() },
       };
     }
+    // 只有系统兜底音色时，必须让上层可感知（kind/notice），绝不假装是晓晓/云希
+    const isFallback = picked.every((v) => v.kind === 'system');
     return {
       available: true,
+      kind: isFallback ? 'system' : 'nvsa',
       voices: picked,
       installed: names,
+      notice: isFallback
+        ? '当前用系统内置语音：音质一般，但几乎没有延迟。装好离线语音后会自动换成晓晓/云希。'
+        : null,
       detail: { installedCount: names.length, nvsaConfig: readNvsaConfig() },
     };
   }

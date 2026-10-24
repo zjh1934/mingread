@@ -146,8 +146,22 @@ const stubEdge = (errMsg, code) => ({
     b.dispose();
   });
 
-  console.log('\n=== 3. 本地未注册 → 降级在线，原因 VOICE_NOT_REGISTERED ===');
+  console.log('\n=== 3. NVSA 未注册 → 系统语音兜底（本地仍可用，且必须可感知）===');
   await withMock({ MOCK_NO_VOICES: '1' }, async () => {
+    const b = newBridge({ edge: stubEdgeOk });
+    const p = await b.local.probe(true);
+    check('本地仍可用（系统语音兜底）', p.available === true, p);
+    check('标记为 system 而非 nvsa', p.kind === 'system', p.kind);
+    check('音色表只有 system', (p.voices || []).length === 1 && p.voices[0].key === 'system', p.voices);
+    check('notice 明确告知「音质换延迟」', typeof p.notice === 'string' && p.notice.length > 0, p.notice);
+    const r = await b.synthesize('本地没有离线语音时应当用系统语音。');
+    check('走本地 sapi（不绕到在线）', r.engine === 'sapi', r.engine);
+    check('不标记为降级到在线', r.degraded === false);
+    b.dispose();
+  });
+
+  console.log('\n=== 3b. 连系统语音都没有 → 才降级在线，原因 VOICE_NOT_REGISTERED ===');
+  await withMock({ MOCK_NO_VOICES: '1', MOCK_NO_ANY_VOICE: '1' }, async () => {
     const b = newBridge({ edge: stubEdgeOk });
     const p = await b.local.probe(true);
     check('本地不可用', p.available === false, p);
@@ -159,7 +173,7 @@ const stubEdge = (errMsg, code) => ({
   });
 
   console.log('\n=== 4. 两条路都不通 → 明确报错，绝不假装播放 ===');
-  await withMock({ MOCK_NO_VOICES: '1' }, async () => {
+  await withMock({ MOCK_NO_VOICES: '1', MOCK_NO_ANY_VOICE: '1' }, async () => {
     const b = newBridge({ edge: stubEdge('模拟：网络不可用') });
     let err = null;
     try {
@@ -174,7 +188,7 @@ const stubEdge = (errMsg, code) => ({
   });
 
   console.log('\n=== 5. 关闭在线兜底 → 不静默走在线，直接报错 ===');
-  await withMock({ MOCK_NO_VOICES: '1' }, async () => {
+  await withMock({ MOCK_NO_VOICES: '1', MOCK_NO_ANY_VOICE: '1' }, async () => {
     settingsStore.saveSettings({ edgeEnabled: false, autoFallback: false });
     const b = newBridge();
     let err = null;
