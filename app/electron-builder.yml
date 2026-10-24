@@ -31,9 +31,6 @@ files:
   - "!scripts/**"
   - "!results/**"
   - "!public/**"
-  # 微软系统组件（本机调试用副本）：正常 Windows 自带 Magnification.dll，
-  # 绝不能随应用分发（许可风险）。代码按「系统路径优先」加载，缺失则降级旧方案。
-  - "!resources/magnification/**"
   - "!src/renderer/**"
   - "!dist/probe/**"
   - "!dist/smoke/**"
@@ -63,6 +60,13 @@ npmRebuild: false
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  # v3.0.0：系统放大组件的兜底副本。
+  # 背景：本机是精简版 Windows，System32 里的 Magnification.dll 是个 22726 字节的
+  # Compact OS 压缩存根（DCS 头，非 PE），加载必然失败。而之前把它排除在包外，
+  # 导致「开发环境能用系统放大、装完就退回旧覆盖层」——功能在用户手里等于不存在。
+  # 现在的策略：正常 Windows 走 System32 自带文件，这份只在系统缺失时启用。
+  - from: resources/magnification
+    to: magnification
 
 win:
   target:

@@ -980,6 +980,30 @@ function createZoomController(opts) {
     console.log(`[zoom] 输入后端: backend=${state.backend} trigger=${state.trigger} zoomHotkeyOk=${state.zoomHotkeyOk}`);
     startLoop();
     registerIpc();
+
+    // v3.0.0：启动后（3s，不抢首屏）探测放大后端并打一行明确日志。
+    // 为什么需要它：曾出现「开发环境 mag 可用、安装版退回覆盖层」而毫无提示，
+    // 用户看到的就是「按 Alt+滚轮调用的是废弃方案、还放不大」，无从判断原因。
+    // 现在无论是走系统接口还是兜底，日志里都有一行结论可查。
+    setTimeout(() => {
+      try {
+        // eslint-disable-next-line global-require
+        const diag = require('./diag');
+        if (magBackend.isAvailable()) {
+          const info = magBackend.getInfo();
+          const line = `放大后端自检：mag 可用（dll=${info.loadedFrom}）`;
+          console.log(`[zoom] ${line}`);
+          diag.log('zoom', line);
+        } else {
+          const info = magBackend.getInfo();
+          const line = `放大后端自检：mag 不可用（${info.reason || '未知'}）→ 将使用旧覆盖层，可能有画面伪影`;
+          console.warn(`[zoom] ${line}`);
+          diag.log('zoom', line);
+        }
+      } catch (e) {
+        console.warn('[zoom] 后端自检异常：', e && e.message);
+      }
+    }, 3000);
   }
 
   function stop() {

@@ -16,6 +16,25 @@ const APP_DIR_NAME = 'MingRead';
 // 打包后（app.isPackaged=true）仍用原目录，老用户设置不迁移、不受影响。
 const USER_DATA_DIR = app.isPackaged ? APP_DIR_NAME : `${APP_DIR_NAME}-dev`;
 app.setName(APP_DIR_NAME);
+
+/**
+ * 启动痕迹（v3.0.0）。
+ *
+ * 为什么要在**模块加载时**就写：打包版是 Windows GUI 子系统，没有 stdout，
+ * 一旦主进程在 whenReady 之前出问题（依赖加载失败、被安全软件拦、权限不足），
+ * 用户看到的就是「双击没反应」，我们什么都拿不到。
+ * 这一行写在最靠前的位置，只要能确认「有这行」，就能把问题范围缩到 whenReady 之后。
+ */
+let BOOT_TRACE = '';
+try {
+  const traceRoot = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  BOOT_TRACE = path.join(traceRoot, USER_DATA_DIR, 'boot.log');
+  fs.mkdirSync(path.dirname(BOOT_TRACE), { recursive: true });
+  fs.appendFileSync(BOOT_TRACE, `${new Date().toISOString()} main loaded (packaged=${app.isPackaged})\n`);
+} catch (e) {
+  BOOT_TRACE = '';
+}
+
 try {
   const appDataRoot =
     process.platform === 'win32'
@@ -262,6 +281,9 @@ function createWindow() {
     }
     win.show();
     console.log(`[boot] window shown (${reason}) +${bootT0 ? Date.now() - bootT0 : 0}ms bg=${startupBg}`);
+    try {
+      if (BOOT_TRACE) fs.appendFileSync(BOOT_TRACE, `${new Date().toISOString()} window shown (${reason}) +${bootT0 ? Date.now() - bootT0 : 0}ms\n`);
+    } catch (e) { /* noop */ }
   };
   revealTimer = setTimeout(() => reveal('timeout'), SHOW_FALLBACK_MS);
   if (typeof revealTimer.unref === 'function') revealTimer.unref();
@@ -470,6 +492,19 @@ function bootstrap() {
 
   app.whenReady().then(() => {
     bootT0 = Date.now(); // WFIX2：启动时间线基准（窗口显示日志以此为零点）
+    // 与模块加载时的那行 boot.log 配对：有这行说明 whenReady 已触发
+    try {
+      if (BOOT_TRACE) fs.appendFileSync(BOOT_TRACE, `${new Date().toISOString()} whenReady fired\n`);
+    } catch (e) { /* noop */ }
+    // v3.0.0：诊断日志（打包版没有 stdout，用户报障时靠这个文件定位）
+    try {
+      const diagPath = require('./diag').init();
+      const diag = require('./diag');
+      diag.log('boot', `启动 v${app.getVersion()} packaged=${app.isPackaged} userData=${app.getPath('userData')}`);
+      diag.log('boot', `诊断日志: ${diagPath}`);
+    } catch (e) {
+      /* 诊断失败不影响启动 */
+    }
     // W-WIN1：必须在 createWindow 之前清掉默认菜单，否则首帧会先带出英文菜单条
     installAppMenu();
     registerWindowControlIpc();

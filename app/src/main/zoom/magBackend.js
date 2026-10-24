@@ -25,6 +25,41 @@ let currentDisplayId = null;
 let lastRect = null;
 let failReason = '';
 let loadedFrom = '';
+let exitHookInstalled = false;
+
+/**
+ * 进程退出兜底（安全关键）。
+ *
+ * 放大宿主窗口是 WS_EX_TOPMOST | WS_EX_TRANSPARENT 的原生窗口，**不归 Chromium 管**：
+ * Electron 退出时不会替你销毁它。一旦残留，就是一块盖满屏幕、鼠标点哪儿都穿过去、
+ * 又永远置顶的东西 —— 用户会以为电脑坏了。
+ *
+ * 这里在进程退出与常见终止信号上尽最大努力销毁窗口。
+ * 已知盲区：taskkill /F 之类的强制杀进程不会触发任何 JS 回调，那种情况只能靠注销/重启。
+ * 因此正常路径（托盘退出、关窗、app.quit）必须走 zoomController.stop()，那是主保障。
+ */
+function installExitHook() {
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  const cleanup = () => {
+    try {
+      destroyWindows();
+    } catch (e) {
+      /* 退出路径上不允许再抛 */
+    }
+  };
+  process.on('exit', cleanup);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    try {
+      process.on(sig, () => {
+        cleanup();
+        process.exit(0);
+      });
+    } catch (e) {
+      /* Windows 上部分信号不可用 */
+    }
+  }
+}
 
 // Win32 常量
 const WS_POPUP = 0x80000000;
@@ -44,24 +79,39 @@ const LWA_ALPHA = 0x2;
 const HOST_EX = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
 const MAG_EX = WS_EX_NOACTIVATE | WS_EX_TRANSPARENT;
 
-/** 优先用系统自带的 Magnification.dll；精简系统缺失时用随应用调试副本兜底。
- *  注意：微软系统组件不随应用分发（electron-builder 已排除 resources/magnification/**），
- *  正常 Windows 一定命中第一条路径。 */
+/** 查找可用的 Magnification.dll。顺序很重要：
+ *    1. 系统 System32 —— 正常 Windows 都有，优先用系统的（不依赖随包文件）
+ *    2. 安装包的 resources/magnification（extraResources 落在这里）
+ *    3. 开发目录 resources/magnification
+ *
+ *  第 2 条是 v3.0.0 补的，也是一次真实事故的教训：
+ *  之前为了「不随应用分发微软组件」把它从包里排除了，结果本机是精简版系统、
+ *  System32 里只有一个 22726 字节的压缩存根（DCS 头，非 PE），
+ *  于是「开发环境能用、装完就退回旧方案」——功能在用户手里等于不存在。
+ *  现在的取舍：包里带一份兜底副本，系统有就用系统的，系统没有才用它。 */
 function locateDll() {
   const candidates = [];
   if (process.env.SystemRoot) candidates.push(path.join(process.env.SystemRoot, 'System32', 'Magnification.dll'));
+  try {
+    // eslint-disable-next-line global-require
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, 'magnification', 'Magnification.dll'));
+    }
+  } catch (e) {
+    /* 非 Electron 环境 */
+  }
   candidates.push(path.join(__dirname, '..', '..', '..', 'resources', 'magnification', 'Magnification.dll'));
+
   for (const c of candidates) {
     try {
-      if (fs.existsSync(c)) {
-        // 快速排除 Compact OS 压缩存根：有效 PE 头是 MZ
-        const fd = fs.openSync(c, 'r');
-        const head = Buffer.alloc(2);
-        fs.readSync(fd, head, 0, 2, 0);
-        fs.closeSync(fd);
-        if (head[0] !== 0x4d || head[1] !== 0x5a) continue;
-        return c;
-      }
+      if (!fs.existsSync(c)) continue;
+      // 快速排除 Compact OS 压缩存根：有效 PE 头是 MZ
+      const fd = fs.openSync(c, 'r');
+      const head = Buffer.alloc(2);
+      fs.readSync(fd, head, 0, 2, 0);
+      fs.closeSync(fd);
+      if (head[0] !== 0x4d || head[1] !== 0x5a) continue;
+      return c;
     } catch (e) {
       /* 继续下一个候选 */
     }
@@ -126,6 +176,7 @@ function init() {
       return false;
     }
     magInitialized = true;
+    installExitHook();
     // 让放大画面里显示真实系统光标（不用自绘假光标）
     try {
       api.MagShowSystemCursor(true);
@@ -188,6 +239,10 @@ function createForDisplay(display) {
   if (!hostHwnd || hostHwnd === 0n) {
     failReason = '宿主窗口创建失败';
     hostHwnd = null;
+    try {
+      // eslint-disable-next-line global-require
+      require('../diag').log('zoom', '放大宿主窗口创建失败');
+    } catch (e) { /* noop */ }
     return false;
   }
   try {
@@ -219,7 +274,14 @@ function createForDisplay(display) {
   }
   u32.ShowWindow(magHwnd, 4);
   currentDisplayId = display.id;
-  console.log(`[mag] windows created display=${display.id} ${w}x${h} dll=${loadedFrom}`);
+  const okLine = `放大窗口已创建 display=${display.id} ${w}x${h} dll=${loadedFrom}`;
+  console.log(`[mag] ${okLine}`);
+  try {
+    // eslint-disable-next-line global-require
+    require('../diag').log('zoom', okLine);
+  } catch (e) {
+    /* 诊断不可用不影响放大 */
+  }
   return true;
 }
 
