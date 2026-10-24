@@ -31,6 +31,9 @@ files:
   - "!scripts/**"
   - "!results/**"
   - "!public/**"
+  # 微软系统组件（本机调试用副本）：正常 Windows 自带 Magnification.dll，
+  # 绝不能随应用分发（许可风险）。代码按「系统路径优先」加载，缺失则降级旧方案。
+  - "!resources/magnification/**"
   - "!src/renderer/**"
   - "!dist/probe/**"
   - "!dist/smoke/**"

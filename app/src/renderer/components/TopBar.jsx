@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react';
 import { AppBar, Toolbar, Typography, Stack, Box, ButtonBase, IconButton, Tooltip, Divider, CircularProgress } from '@mui/material';
-import { GraphicEq, Settings as SettingsIcon, DarkMode, LightMode, Contrast } from '@mui/icons-material';
+import { Settings as SettingsIcon, DarkMode, LightMode, Contrast } from '@mui/icons-material';
 // α-视觉增强：px → rem，字号随档位缩放（禁止再写死 fontSize: 13 这类数字）
 import { fs, su } from '../theme';
 import announcer from '../services/announcer';
 import WindowControls from './WindowControls';
+import BrandMark from './BrandMark';
 
 // W-WIN1：窗口是无边框的（frame:false），整条 TopBar 就是标题栏。
 // 所以根容器是拖拽区（drag），里面每个可交互元素必须 no-drag，否则点击会被拖动吞掉。
@@ -131,23 +132,8 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
           pr: 0, // 控制键贴到窗口右边缘（Windows 惯例），顶栏本身留白由左内边距承担
         }}
       >
-        <Box
-          sx={{
-            // 同上：2.0x 档 height 会被 index.css 的 !important 规则抹掉，用 aspect-ratio 保正方形
-            width: su(38),
-            aspectRatio: '1',
-            borderRadius: '12px',
-            display: 'grid',
-            placeItems: 'center',
-            color: '#fff',
-            flexShrink: 0,
-            background: (t) =>
-              `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.secondary.main})`,
-            boxShadow: '0 6px 16px rgba(107,91,255,0.28)',
-          }}
-        >
-          <GraphicEq sx={{ fontSize: fs(18) }} />
-        </Box>
+        {/* 品牌标记：与应用图标同一套图形（原先是渐变方块 + GraphicEq，用户评价「像鲁大师」） */}
+        <BrandMark size={38} />
 
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6" noWrap component="h1">
