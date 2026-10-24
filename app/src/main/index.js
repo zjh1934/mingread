@@ -7,9 +7,9 @@ const fs = require('fs');
 const { app, BrowserWindow, nativeImage, Menu, ipcMain } = require('electron');
 
 // 固定 ASCII 的产品目录名：避免中文路径影响 NVSA 语音引擎与注册表路径
-const APP_DIR_NAME = 'LangduNvNeo';
+const APP_DIR_NAME = 'MingRead';
 // v2.4.0：调试版与安装版必须用**不同的** userData 目录。
-// 事故复盘：两者共用 %APPDATA%\LangduNvNeo 时，
+// 事故复盘：两者共用 %APPDATA%\MingRead 时，
 //   · 调试探针改的主题/字号/热键会立刻串到用户正在用的安装版；
 //   · 两个进程同时跑会抢同一个朗读热键、出现两个托盘图标和两个悬浮球；
 //   · 用户看到「叉掉窗口后托盘点不开」时，无法判断是自身 bug 还是调试版干扰。
@@ -17,12 +17,29 @@ const APP_DIR_NAME = 'LangduNvNeo';
 const USER_DATA_DIR = app.isPackaged ? APP_DIR_NAME : `${APP_DIR_NAME}-dev`;
 app.setName(APP_DIR_NAME);
 try {
-  const asciiUserData =
+  const appDataRoot =
     process.platform === 'win32'
-      ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), USER_DATA_DIR)
-      : path.join(os.homedir(), '.config', USER_DATA_DIR);
+      ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+      : path.join(os.homedir(), '.config');
+  const asciiUserData = path.join(appDataRoot, USER_DATA_DIR);
   fs.mkdirSync(asciiUserData, { recursive: true });
   app.setPath('userData', asciiUserData);
+
+  // v2.4.0 改名迁移：产品从「朗读女 Neo」改名为「明读」，userData 目录随之从
+  // LangduNvNeo 变为 MingRead。老用户的热键/主题/字号都在旧 settings.json 里，
+  // 不迁移的话升级后一切回到默认——对低视力用户来说等于要重设一遍，不能接受。
+  // 只在「新目录还没有 settings.json」时复制一次，之后两边各自独立，不会互相覆盖。
+  try {
+    const legacyDirName = app.isPackaged ? 'LangduNvNeo' : 'LangduNvNeo-dev';
+    const legacySettings = path.join(appDataRoot, legacyDirName, 'settings.json');
+    const targetSettings = path.join(asciiUserData, 'settings.json');
+    if (!fs.existsSync(targetSettings) && fs.existsSync(legacySettings)) {
+      fs.copyFileSync(legacySettings, targetSettings);
+      console.log(`[boot] migrated settings from ${legacyDirName} -> ${USER_DATA_DIR}`);
+    }
+  } catch (e) {
+    /* 迁移失败不影响启动，只是回到默认设置 */
+  }
 } catch (e) {
   /* 保留默认路径 */
 }
@@ -123,7 +140,7 @@ function getWindowOptions() {
     thickFrame: true,
     backgroundColor: resolveStartupBackground(),
     show: false,
-    title: '朗读女 Neo',
+    title: '明读',
     icon: ICON_PATH ? nativeImage.createFromPath(ICON_PATH) : undefined,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),

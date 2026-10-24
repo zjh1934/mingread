@@ -102,7 +102,7 @@ const VP_ERRORS = {
 function defaultManifest() {
   return {
     schemaVersion: 1,
-    name: '朗读女 Neo 内置音色源',
+    name: '明读 内置音色源',
     voices: VOICE_PACKS.map((p) => ({
       key: p.id,
       displayName: p.displayName,

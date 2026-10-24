@@ -32,7 +32,7 @@ import HeroStatus from './components/HeroStatus';
 import ShortcutGuide from './components/ShortcutGuide';
 
 const SAMPLE_TEXT =
-  '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
+  '明读 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
 
 /** 语速步进：限制在 [-50, 100]、按 10 一档对齐（与 Controls / TuningPanel 的口径一致） */
 const clampRate = (v) => Math.max(-50, Math.min(100, Math.round(Number(v) / 10) * 10));
@@ -636,7 +636,7 @@ export default function App() {
       return;
     }
     try {
-      let outPath = await api.saveDialog('朗读女.mp3');
+      let outPath = await api.saveDialog('明读.mp3');
       if (!outPath) return;
       // 不再无脑补 .mp3：本地 SAPI 实际产出 wav，exporter 会按真实格式把 .mp3 纠正成 .wav，
       // 这里再补一次就会叠出 .mp3.wav 双扩展名。仅在完全没有音频扩展名时补占位后缀。

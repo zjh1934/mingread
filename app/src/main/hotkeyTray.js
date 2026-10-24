@@ -90,7 +90,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
       // 连重建都失败：必须让用户知道，不能点了没反应
       try {
         a11y.announce({
-          text: '主窗口已关闭且无法重新打开，请从开始菜单重新启动朗读女。',
+          text: '主窗口已关闭且无法重新打开，请从开始菜单重新启动明读。',
           priority: 'high',
         });
       } catch (e) {
@@ -152,7 +152,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
       const target = resolveWindow();
       if (!target) {
         a11y.announce({
-          text: '没有可以朗读的窗口。请右键任务栏右下角的朗读女图标，选择「显示主窗口」。',
+          text: '没有可以朗读的窗口。请右键任务栏右下角的明读图标，选择「显示主窗口」。',
           priority: 'high',
         });
         console.warn('[hotkey] read skipped: no window to deliver result');
@@ -193,7 +193,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
       const p = a11y.announce({
         text: hooked
           ? `热键 ${accelerator} 已被其他程序独占，已自动改用底层监听，按 ${accelerator} 照样能朗读。若想彻底接管，退出占用它的程序即可，我会自动切换回来。`
-          : `热键 ${accelerator} 被其他程序占用，朗读暂不可用。常见原因是旧版朗读女正在运行，请退出后会自动重试，或在设置中更换热键。`,
+          : `热键 ${accelerator} 被其他程序占用，朗读暂不可用。常见原因是其他朗读软件正在运行，请退出后会自动重试，或在设置中更换热键。`,
         priority: 'high',
       });
       if (p && typeof p.then === 'function') {
@@ -272,7 +272,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
   try {
     tray = new Tray(trayIcon());
     tray.setContextMenu(buildMenu());
-    tray.setToolTip(`朗读女 Neo · 选中文字按 ${getHotkey() || DEFAULT_HOTKEY} 朗读`);
+    tray.setToolTip(`明读 · 选中文字按 ${getHotkey() || DEFAULT_HOTKEY} 朗读`);
     tray.on('click', () => {
       // 左键单击 = 恢复主窗口。窗口被 hide 到托盘时，这是用户唯一的「找回来」入口，
       // 所以绝对不能静默失败（见 showMainWindow 的兜底播报）。
@@ -317,7 +317,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
     try {
       if (tray && !tray.isDestroyed()) {
         tray.setContextMenu(buildMenu());
-        tray.setToolTip(`朗读女 Neo · 选中文字按 ${hk} 朗读`);
+        tray.setToolTip(`明读 · 选中文字按 ${hk} 朗读`);
       }
     } catch (e) {
       /* noop */
@@ -338,7 +338,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
     }
   }
 
-  /** v2.4.0：热键被占用时的有界自动重试。典型场景：旧版「朗读女」常驻占 F1，用户退出后
+  /** v2.4.0：热键被占用时的有界自动重试。典型场景：旧版「明读」常驻占 F1，用户退出后
    *  新版几秒内自动接管并语音告知。RETRY_MAX 次（约 10 分钟）后停止，不无限循环；
    *  之后用户可在设置里更换热键，或重启应用再次重试。 */
   const RETRY_INTERVAL_MS = 5000;
@@ -426,7 +426,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
     if (!tray || tray.isDestroyed()) return;
     try {
       tray.displayBalloon({
-        title: '朗读女 Neo 仍在后台运行',
+        title: '明读 仍在后台运行',
         content: `按 ${getHotkey() || DEFAULT_HOTKEY} 照样能朗读。要重新打开窗口，单击这个图标；要彻底退出，右键图标选「退出」。`,
       });
     } catch (e) {

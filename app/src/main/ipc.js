@@ -285,7 +285,7 @@ function registerIpc(getWindow, state) {
   ipcMain.handle('voice:preview', async (_e, payload) => {
     const { voiceId, text, opts } = payload || {};
     try {
-      const res = await getBridge().synthesize(text || '你好，我是朗读女，这是音色试听。', {
+      const res = await getBridge().synthesize(text || '你好，我是明读，这是音色试听。', {
         ...(opts || {}),
         voiceId,
       });

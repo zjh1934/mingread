@@ -124,7 +124,7 @@ export default function AboutSection({ status }) {
   return (
     <>
       <SettingGroup title="应用信息">
-        <InfoRow label="名称" value={app.name || '朗读女 Neo'} />
+        <InfoRow label="名称" value={app.name || '明读'} />
         <InfoRow label="版本" value={app.version ? `v${app.version}` : '未知（主进程未就绪）'} />
         <Divider />
         <InfoRow

@@ -2,11 +2,11 @@
 'use strict';
 
 module.exports = {
-  APP_NAME: '朗读女 Neo',
-  APP_NAME_EN: 'LangduNv Neo',
+  APP_NAME: '明读',
+  APP_NAME_EN: 'MingRead',
   APP_VERSION: '2.4.0',
-  APP_ID: 'com.langdunv.neo',
-  REPO_URL: 'https://github.com/zjh1934/langdu-nv',
+  APP_ID: 'com.mingread.app',
+  REPO_URL: 'https://github.com/zjh1934/mingread',
 
   // v2.4.0：三级引擎链——本地 NVSA(SAPI) 优先 → espeak（仅沙箱/CI 验证，产品路径不启用）→ Edge 在线兜底。
   // 运行时唯一 npm 依赖仍为 node-edge-tts；sapi/espeak 后端均不引入新依赖。

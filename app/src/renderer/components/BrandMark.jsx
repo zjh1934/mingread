@@ -8,7 +8,7 @@
 import React from 'react';
 import { su } from '../theme';
 
-export default function BrandMark({ size = 38, title = '朗读女 Neo' }) {
+export default function BrandMark({ size = 38, title = '明读' }) {
   const px = su(size);
   return (
     <svg

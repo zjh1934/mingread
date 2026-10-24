@@ -137,7 +137,7 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
 
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6" noWrap component="h1">
-            朗读女 Neo
+            明读
           </Typography>
           <Typography
             variant="caption"

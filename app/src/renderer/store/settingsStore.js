@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 // 语音引擎链（本地 NVSA 优先 / Edge 在线兜底）的运行状态，渲染层只读展示
 export const EMPTY_VOICE_STATUS = {
-  app: { name: '朗读女 Neo', version: '' },
+  app: { name: '明读', version: '' },
   engine: { id: 'edge', label: '微软 Edge 语音', online: true, ready: false, voiceCount: 0, detail: '', lastError: null },
   voices: [],
   voiceId: '',

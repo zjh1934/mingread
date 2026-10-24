@@ -166,7 +166,7 @@ function defaultUserDataPath() {
   } catch (e) {
     /* 非 Electron 环境 */
   }
-  return path.join(process.env.APPDATA || os.homedir(), 'langdu-nv-neo');
+  return path.join(process.env.APPDATA || os.homedir(), 'mingread');
 }
 
 function cliWorkDir() {
@@ -240,7 +240,7 @@ class VoiceDeploy {
     const userData = this._userData || defaultUserDataPath();
     const ud = path.join(userData, 'voice-pack');
     // NVSA 对非 ASCII 路径不友好（register-nvsa.ps1 第 22 行同款警告）；
-    // 「朗读女 Neo」的 userData 默认含中文，故此时退到纯 ASCII 的 %LOCALAPPDATA%\langdu-nv\voice-pack
+    // 「明读」的 userData 默认含中文，故此时退到纯 ASCII 的 %LOCALAPPDATA%\langdu-nv\voice-pack
     if (isAsciiPath(ud)) return { dir: ud, source: 'userData' };
     return { dir: cli, source: 'ascii-fallback' };
   }
@@ -925,7 +925,7 @@ class VoiceDeploy {
 
     let ws = null;
     try {
-      const headers = { 'User-Agent': 'langdu-nv-neo/2.4 (+https://github.com/zjh1934/langdu-nv)' };
+      const headers = { 'User-Agent': 'mingread/2.4 (+https://github.com/zjh1934/mingread)' };
       if (resumeFrom > 0) headers.Range = `bytes=${resumeFrom}-`;
       const res = await this._fetch(url, { signal: ctrl.signal, redirect: 'follow', headers });
       if (!res || !res.ok) throw new Error(`HTTP ${(res && res.status) || '无响应'}`);

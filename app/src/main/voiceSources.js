@@ -451,7 +451,7 @@ async function fetchManifestText(url, opts) {
       res = await fetchImpl(url, {
         signal: ctrl ? ctrl.signal : undefined,
         redirect: 'follow',
-        headers: { 'User-Agent': 'langdu-nv-neo/2.4 (+https://github.com/zjh1934/langdu-nv)' },
+        headers: { 'User-Agent': 'mingread/2.4 (+https://github.com/zjh1934/mingread)' },
       });
     } catch (err) {
       const e = new Error(`取清单失败：${(err && err.message) || err}`);

@@ -417,7 +417,7 @@ async function handleCmd(payload) {
         // 不许静默：球点了但送不出去，必须说明（否则用户以为软件坏了）
         try {
           a11y.announce({
-            text: '主窗口已关闭，朗读送不出去。请右键任务栏右下角的朗读女图标，选择「显示主窗口」。',
+            text: '主窗口已关闭，朗读送不出去。请右键任务栏右下角的明读图标，选择「显示主窗口」。',
             priority: 'high',
           });
         } catch (e) {

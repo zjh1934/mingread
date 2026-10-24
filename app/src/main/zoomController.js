@@ -1,4 +1,4 @@
-// 屏幕缩放（复刻 macOS 缩放）主进程控制器 —— v2.3 集成进 朗读女 Neo（src/main/）
+// 屏幕缩放（复刻 macOS 缩放）主进程控制器 —— v2.3 集成进 明读（src/main/）
 // 毛坯来源：_src/LensZoom-handover/electron/zoomController.js。本文件按集成评审逐条修复：
 //   F1  koffi/uiohook 原生模块本环境不存在 → 新增「热键触发模式」兜底（globalShortcut
 //       Ctrl+Alt+= 放大 / Ctrl+Alt+- 缩小 / Ctrl+Alt+0 退出），zoomTrigger 设置 auto|hotkey；
@@ -23,7 +23,7 @@ const path = require('path');
 const { BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcut } = require('electron');
 
 // ---------------------------------------------------------------------------
-// 配置默认值（并入 朗读女 Neo 的 settingsStore 默认值即可）
+// 配置默认值（并入 明读 的 settingsStore 默认值即可）
 // ---------------------------------------------------------------------------
 const ZOOM_DEFAULTS = {
   zoomEnabled: true,        // 总开关
