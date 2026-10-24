@@ -589,6 +589,31 @@ function createZoomController(opts) {
     return true;
   }
 
+  /**
+   * 按倍率因子缩放（滚轮连续推进用）。
+   * 与 bump() 的区别：bump 是「一格一档」的离散跳变（键盘快捷键仍走它，保证精确可控）；
+   * 这里是「按滚动量连续推」，手感对齐 macOS 的 Ctrl+滚轮。
+   */
+  function applyZoomFactor(factor) {
+    const s = getSettings();
+    const zmin = Number(s.zoomMin) || 1;
+    const zmax = Number(s.zoomMax) || 24;
+    if (factor > 1) state.exiting = false; // 缩回 1x 途中反向滚动要能救回来
+    let next = state.targetZoom * factor;
+    // 刻意**不**在这里套 zoomInteger 取整：
+    // 整数模式是为「放大后像素对齐」设的，但取整会让连续滚轮永远原地不动
+    // （2 × 1.12 = 2.24 → round 回 2），实测直接把滚轮废掉。
+    // 取整只保留给键盘档位（bump），滚轮始终连续。
+    next = Math.max(zmin, Math.min(zmax, next));
+    if (next <= 1 + 1e-6) {
+      beginExit();
+      return;
+    }
+    state.targetZoom = next;
+    state.lastStepAt = Date.now();
+    notifyRenderer();
+  }
+
   function onWheel(delta) {
     const s = getSettings();
     if (!s.zoomEnabled || state.paused) return false;
@@ -597,7 +622,12 @@ function createZoomController(opts) {
       activate();
       return true;
     }
-    bump(delta > 0);
+    // macOS 手感：按滚动量做指数缩放，而不是「一格固定跳一档」。
+    // 标准滚轮一格是 120，取 1.12 倍 —— 滚 6 格约 2 倍；触控板会发十几的小 delta，
+    // 自然变成连续微调（每次约 1.5%），这正是「推着画面走」的观感。
+    // 限幅 ±3 格：高分辨率滚轮/驱动偶发会报极大值，不夹住会一次冲到最大倍率。
+    const steps = Math.max(-3, Math.min(3, delta / 120));
+    applyZoomFactor(Math.pow(1.12, steps));
     return true;
   }
 

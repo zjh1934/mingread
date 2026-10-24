@@ -75,7 +75,7 @@
 ## 系统要求
 
 - Windows 10 / 11 x64
-- 安装包与免安装 zip 都在 [Releases](https://github.com/zjh1934/mingread/releases/latest)：`MingRead-2.4.0-setup.exe`（安装）或 `MingRead-2.4.0-win-x64.zip`（免安装）
+- 安装包与免安装 zip 都在 [Releases](https://github.com/zjh1934/mingread/releases/latest)：`MingRead-<版本>-setup.exe`（安装）或 `MingRead-<版本>-win-x64.zip`（免安装）
 
 ## 自己编译
 
