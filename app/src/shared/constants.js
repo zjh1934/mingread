@@ -4,14 +4,15 @@
 module.exports = {
   APP_NAME: '朗读女 Neo',
   APP_NAME_EN: 'LangduNv Neo',
-  APP_VERSION: '2.3.0',
+  APP_VERSION: '2.4.0',
   APP_ID: 'com.langdunv.neo',
   REPO_URL: 'https://github.com/zjh1934/langdu-nv',
 
-  // 唯一合成方案：微软 Edge 在线语音接口（node-edge-tts）
-  ENGINE: { EDGE: 'edge' },
-  ENGINE_LABEL: { edge: '微软 Edge 语音' },
-  ENGINE_ORDER: ['edge'],
+  // v2.4.0：三级引擎链——本地 NVSA(SAPI) 优先 → espeak（仅沙箱/CI 验证，产品路径不启用）→ Edge 在线兜底。
+  // 运行时唯一 npm 依赖仍为 node-edge-tts；sapi/espeak 后端均不引入新依赖。
+  ENGINE: { EDGE: 'edge', SAPI: 'sapi', ESPEAK: 'espeak' },
+  ENGINE_LABEL: { edge: '微软 Edge 在线语音', sapi: '本地离线语音（NVSA）', espeak: 'espeak-ng（验证专用）' },
+  ENGINE_ORDER: ['sapi', 'espeak', 'edge'],
 
   // 只保留两个音色
   EDGE_VOICES: [
@@ -50,8 +51,8 @@ module.exports = {
   // 支持的文件格式
   SUPPORTED_FILE_EXT: ['.txt', '.md', '.epub'],
 
-  // 默认全局热键：选中任意处文字后按 F1 直接朗读
-  DEFAULT_HOTKEY: 'Ctrl+Alt+R',
+  // 默认全局热键（v2.4.0 起，用户明确要求）：选中任意处文字后按 F1 直接朗读（Ctrl+Alt+R 为备选预设）
+  DEFAULT_HOTKEY: 'F1',
 
   ERR: {
     TTS_SYNTH_FAIL: 'TTS_SYNTH_FAIL',

@@ -1,4 +1,5 @@
-// 语音编排（精简版）：只有 Edge 一条链路，状态只报告"能不能用 + 上次错误"。
+// 语音编排（精简版）：三级引擎链（本地 NVSA 优先 → espeak 验证专用 → Edge 在线兜底）的状态 base，
+// 完整状态由 ttsBridge.getStatus() 覆盖合并；本模块另管 voiceId 持久化与 lastError 广播。
 'use strict';
 
 const C = require('../shared/constants');
@@ -46,24 +47,23 @@ function getStatus() {
   }));
   return {
     app: { name: C.APP_NAME, version: C.APP_VERSION },
+    // 注意：engine 各字段均为占位默认值，ttsBridge.getStatus() 会用真实引擎状态整体覆盖
     engine: {
       id: 'edge',
-      label: '微软 Edge 语音',
+      label: '语音引擎',
       online: true,
       ready: available,
       voiceCount: voices.length,
-      detail: available
-        ? '在线合成 · 需要网络 · 晓晓 / 云希'
-        : '合成组件不可用（缺少 node-edge-tts 依赖）',
+      detail: available ? '语音引擎就绪' : '合成组件不可用（缺少 node-edge-tts 依赖）',
       lastError: _lastError,
     },
     voices,
     voiceId: settings.voiceId,
     edgeEnabled: true,
-    autoFallback: false,
+    autoFallback: true,
     // 兼容旧字段（渲染层/自检脚本仍读这两个）
     offlineReady: false,
-    tier: 'edge',
+    tier: '',
     engines: [],
   };
 }

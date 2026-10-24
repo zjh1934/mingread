@@ -130,7 +130,7 @@ function installGlobalHooks() {
     const api = window.langdu;
     if (api && typeof api.onHotkeyConflict === 'function') {
       api.onHotkeyConflict((payload) => {
-        const acc = (payload && payload.accelerator) || 'Ctrl+Alt+R';
+        const acc = (payload && payload.accelerator) || 'F1';
         record(`热键 ${acc} 被其他程序占用，选中朗读暂不可用`, { severity: 'warning', source: 'hotkey' });
       });
     }

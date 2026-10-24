@@ -71,21 +71,37 @@ function wrapPcmAsWav(pcm, sampleRate, bitsPerSample, numChannels) {
   return new Uint8Array(buffer);
 }
 
-/** 读取 HKCU 下 NVSA 配置（仅 Windows；失败返回 null，不影响主流程） */
+/** 读取 HKCU 下 NVSA 配置（仅 Windows；失败返回 null，不影响主流程）
+ *  v2.4.0：由 reg.exe 文本解析改为 PowerShell 注册表提供程序（Get-ItemProperty + JSON 输出）：
+ *   - reg.exe 的文本输出格式随系统区域设置变化，解析脆弱；
+ *   - 部分安全策略环境（开发沙箱/企业管控）禁跑 reg.exe，会让预热探测整体挂掉。
+ *  PowerShell 是本项目既有依赖面（sapiHost 长驻通道同款做法），一次性进程 + 8s 超时，
+ *  键不存在时输出 {}，Node 侧零格式假设。 */
 function readNvsaConfig() {
   if (process.platform !== 'win32') return null;
   try {
-    const out = execFileSync('reg', ['query', REG_KEY], { encoding: 'utf8', windowsHide: true });
-    const pick = (name) => {
-      const m = out.match(new RegExp(`^\\s*${name}\\s+REG_\\w+\\s+(.+)$`, 'im'));
-      return m ? m[1].trim() : null;
-    };
-    const p = pick('NarratorVoicePath');
+    const psPath = REG_KEY.replace(/^HKCU\\/, 'HKCU:\\');
+    const script = [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$p = Get-ItemProperty -Path '${psPath}'`,
+      'if ($null -eq $p) { Write-Output "{}" }',
+      'else {',
+      '  [ordered]@{ NarratorVoicePath = $p.NarratorVoicePath; NoEdgeVoices = $p.NoEdgeVoices; NoAzureVoices = $p.NoAzureVoices } | ConvertTo-Json -Compress -Depth 2',
+      '}',
+    ].join('\n');
+    const enc = Buffer.from(script, 'utf16le').toString('base64');
+    const out = execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', enc], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000,
+    });
+    const j = JSON.parse(String(out).trim() || '{}');
+    const p = j.NarratorVoicePath ? String(j.NarratorVoicePath) : null;
     return {
       narratorVoicePath: p,
       narratorVoicePathExists: !!(p && fs.existsSync(p)),
-      noEdgeVoices: pick('NoEdgeVoices'),
-      noAzureVoices: pick('NoAzureVoices'),
+      noEdgeVoices: j.NoEdgeVoices == null ? null : String(j.NoEdgeVoices),
+      noAzureVoices: j.NoAzureVoices == null ? null : String(j.NoAzureVoices),
     };
   } catch (e) {
     return null;

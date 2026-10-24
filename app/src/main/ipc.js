@@ -61,7 +61,7 @@ function systemSettingsSnapshot() {
     /* 用 state 兜底 */
   }
   return {
-    hotkey: _state.hotkey || s.hotkey || 'Ctrl+Alt+R',
+    hotkey: _state.hotkey || s.hotkey || 'F1',
     clipboardAuto: !!_state.clipboardAuto,
     floatBallEnabled: s.floatBallEnabled !== false,
     hotkeyOk: !!_state.hotkeyOk,

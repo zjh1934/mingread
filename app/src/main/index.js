@@ -41,10 +41,10 @@ let hotkeyRef = null;
 let ipcApi = null;
 
 // v2.2：settings.json（settingsStore，启动时已做旧热键迁移）是系统设置权威源
-// v2.3.1：默认热键 Ctrl+Alt+R（基线 P2-11，F1 仅留可选预设）；复制即读默认开（基线 P1-9）
+// v2.4.0：默认热键 F1（用户明确要求，Ctrl+Alt+R 留备选）；复制即读默认开（基线 P1-9）
 const initialSettings = settingsStore.getSettings();
 const state = {
-  hotkey: initialSettings.hotkey || 'Ctrl+Alt+R',
+  hotkey: initialSettings.hotkey || 'F1',
   hotkeyOk: false,
   playback: { isPlaying: false, buffering: false, hasAudio: false },
   clipboardAuto: !!initialSettings.clipboardAuto,

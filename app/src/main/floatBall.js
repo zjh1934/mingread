@@ -260,7 +260,7 @@ function dispose() {
 /** 向球窗口广播状态 {isPlaying, buffering, hotkey, hotkeyOk} */
 function broadcastState() {
   if (!ballWin || ballWin.isDestroyed()) return;
-  let s = { playback: {}, hotkey: 'Ctrl+Alt+R', hotkeyOk: false };
+  let s = { playback: {}, hotkey: 'F1', hotkeyOk: false };
   try {
     if (typeof getStateFn === 'function') s = getStateFn() || s;
   } catch (e) {
@@ -269,7 +269,7 @@ function broadcastState() {
   const payload = {
     isPlaying: !!(s.playback && s.playback.isPlaying),
     buffering: !!(s.playback && s.playback.buffering),
-    hotkey: s.hotkey || 'Ctrl+Alt+R',
+    hotkey: s.hotkey || 'F1',
     hotkeyOk: !!s.hotkeyOk,
     size: ballSize(), // α：页面据此同步球体/图标/菜单字号
   };

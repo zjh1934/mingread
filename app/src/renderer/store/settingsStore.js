@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-// 唯一合成链路（微软 Edge 在线语音）的运行状态，渲染层只读展示
+// 语音引擎链（本地 NVSA 优先 / Edge 在线兜底）的运行状态，渲染层只读展示
 export const EMPTY_VOICE_STATUS = {
   app: { name: '朗读女 Neo', version: '' },
   engine: { id: 'edge', label: '微软 Edge 语音', online: true, ready: false, voiceCount: 0, detail: '', lastError: null },
@@ -34,7 +34,7 @@ export const useSettings = create(
       volume: 0,
 
       // ---- 系统设置（主进程权威，仅运行时同步，不持久化）----
-      hotkey: 'Ctrl+Alt+R',
+      hotkey: 'F1',
       clipboardAuto: false,
       floatBallEnabled: true,
       hotkeyOk: undefined, // undefined=尚未同步；true=已注册；false=被占用

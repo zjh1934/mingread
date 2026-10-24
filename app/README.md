@@ -56,7 +56,7 @@
 ## 功能
 
 - **屏幕缩放**（v2.3，复刻 macOS 缩放）：任意位置按 `Ctrl+Alt+=` 放大一档 / `Ctrl+Alt+-` 缩小一档 / `Ctrl+Alt+0` 退出；画面跟随指针（指针为不动点 / 指针居中 / 边缘推动三种策略），整数倍步进像素锐利，放大时鼠标穿透不影响操作下层界面；倍率缩回 1x 自动退出。托盘菜单、悬浮球右键、设置界面均可控制
-- **划词朗读**：在浏览器 / Word / PDF / 微信里选中文字，按 `Ctrl+Alt+R` 直接读（默认热键；`F1` 保留为可选预设。自动抓取选中内容，读完还原你的剪贴板）
+- **划词朗读**：在浏览器 / Word / PDF / 微信里选中文字，按 `F1` 直接读（默认热键；`Ctrl+Alt+R` 等为可选预设。自动抓取选中内容，读完还原你的剪贴板）
 - **桌面悬浮球**（v2.2）：桌面右上角常驻小圆球，**单击朗读当前选中文字**，可拖动、位置自动记忆，设置里可关；球变红表示热键被占用；右键菜单可控制播放与缩放
 - 文本朗读：粘贴 / 输入 / 导入 `.txt` `.md` `.epub`（epub 自动拆章节）
 - 逐句流式播放：第一句合成完就出声，后面边播边合成，长文不用等
@@ -69,19 +69,19 @@
 ## 安装 / 使用
 
 1. 运行 `朗读女Neo-2.3.0-安装包.exe`（或解压 `朗读女 Neo-2.3.0-win.zip` 直接运行）。
-2. 粘贴文字 → 点「开始朗读」；或在任意程序选中文字 → 按 `Ctrl+Alt+R`（或单击桌面悬浮球）。
+2. 粘贴文字 → 点「开始朗读」；或在任意程序选中文字 → 按 `F1`（或单击桌面悬浮球）。
 3. 屏幕缩放：任意位置按 `Ctrl+Alt+=` / `Ctrl+Alt+-` / `Ctrl+Alt+0`。
-4. 音色只有两个：**晓晓**（女声）/ **云希**（男声）。
+4. 音色：本地离线 **晓晓**（女声）/ **云希**（男声）双发音人（首次运行一键部署，不随包分发）；在线兜底默认晓晓。
 
 ### 关于热键占用
 
-`Ctrl+Alt+R` 是默认全局热键。旧版「朗读女」常驻占的是 `F1`——换用 `Ctrl+Alt+R` 正好绕开；若你在设置里主动选回 `F1` 等预设，而此刻**旧版「朗读女」或其他软件正开着**，可能注册失败。新版会明确告诉你：
+`F1` 是默认全局热键（v2.4.0 起，应用户明确要求）。旧版「朗读女」常驻占的也是 `F1`——若此刻它正开着，注册会失败；**退出旧版后，新版每 5 秒自动重试，抢回热键会语音告知**（约 10 分钟后停止自动重试，可在设置里更换热键或重启应用）。注册失败时新版会明确告诉你：
 
 - 托盘弹出气泡「热键被占用」；
 - 设置 → 全局热键 显示「⚠️ 注册失败（被占用）」；
 - 桌面悬浮球变红并带感叹号。
 
-**解决办法**：退出占用该热键的程序（尤其是旧版朗读女），或在设置里把热键换成其他预设（`F1` / `Ctrl+Alt+F1` / `Shift+F1`）或自定义组合，保存后立即生效。
+**解决办法**：退出占用该热键的程序（尤其是旧版朗读女）——退出后会自动重试抢回；或在设置里把热键换成其他预设（`Ctrl+Alt+R` / `Ctrl+Alt+F1` / `Shift+F1`）或自定义组合，保存后立即生效。
 
 ## 从源码构建
 
@@ -108,21 +108,28 @@ python scripts/selfcheck_all.py        # 汇总（需联网）
 app/
 ├─ src/main/
 │  ├─ index.js             # 入口（userData 固定 ASCII 路径）
-│  ├─ ttsBridge.js         # 唯一引擎：Edge
-│  ├─ backends/edgeTtsBackend.js
-│  ├─ selectionReader.js   # Ctrl+Alt+R/悬浮球划词：Ctrl+C 抓取 + 还原剪贴板
-│  ├─ hotkeyTray.js        # 全局热键（默认 Ctrl+Alt+R，F1 为可选预设，占用可检测）+ 托盘
+│  ├─ ttsBridge.js         # 引擎路由：本地 NVSA 优先 → espeak（验证专用）→ Edge 在线兜底
+│  ├─ backends/            # 引擎实现：sapiBackend/sapiHost（NVSA）、edgeTtsBackend、espeakBackend（验证）、voiceCatalog、engineErrors
+│  ├─ selectionReader.js   # F1/悬浮球划词：Ctrl+C 抓取 + 还原剪贴板
+│  ├─ hotkeyTray.js        # 全局热键（默认 F1，Ctrl+Alt+R 为备选，占用可检测 + 自动重试）+ 托盘
 │  ├─ floatBall.js         # v2.2 桌面悬浮球（置顶小窗 / 拖动 / 右键菜单 / 状态广播）
 │  ├─ zoomController.js    # v2.3 屏幕缩放控制器（热键/滚轮触发、几何变换、覆盖层编排）
 │  ├─ zoomPreload.js       # v2.3 缩放覆盖层预加载（getUserMedia 屏幕流）
 │  ├─ zoom-overlay.html    # v2.3 缩放覆盖层页面（video + CSS transform）
 │  ├─ clipboardMonitor.js  # 复制即读（默认开：节流 + 长度上限，可关）
-│  ├─ voiceSetup.js        # 状态（在线可用 / 上次错误）
+│  ├─ a11yFeedback.js      # 语音播报 + 提示音（隐藏音频窗口，热键反馈 ≤200ms）
+│  ├─ settingsStore.js     # settings.json 系统设置权威源（含旧热键迁移）
+│  ├─ voiceSetup.js        # 语音状态广播 + voiceId 持久化
 │  ├─ exporter.js          # 分段合成 → MP3 拼接 / 字幕
 │  ├─ epubReader.js        # 零依赖 epub 解析
+│  ├─ util.js              # 分句 / 时间轴 / WAV 头
+│  ├─ platform/            # 平台适配（detect/keystroke：Windows SendKeys / X11 xdotool）
 │  └─ ipc.js               # 通道定义
-├─ src/renderer/           # React + MUI + Zustand
+├─ src/preload/index.js    # contextBridge 白名单契约
+├─ src/shared/             # constants.js / types.js
+├─ src/renderer/           # React + MUI + Zustand（App / components / hooks / services / store / theme）
 ├─ public/floatball.html   # v2.2 悬浮球页面（静态，零依赖）
+├─ scripts/                # 自检/探针/注册（check-syntax、probe-tts、register-nvsa、win-selfcheck…）
 └─ resources/icon.*        # 图标
 ```
 
@@ -134,7 +141,7 @@ app/
 | Electron | 32.3.3 | MIT | 桌面运行时 |
 | React / MUI / Zustand | — | MIT | 界面 |
 
-> 语音由微软 Edge 在线接口提供，本项目不再随包分发任何语音模型或语音包。
+> 语音链路：本地 NVSA（微软神经语音，首次运行一键部署，不随包分发）优先，Edge 在线接口兜底。
 > 详见 THIRD-PARTY-NOTICES.md。
 
 ## 与原版「朗读女」的关系

@@ -23,13 +23,13 @@ def read(rel):
 
 def main():
     pkg = json.load(open(os.path.join(ROOT, 'package.json'), encoding='utf-8'))
-    add(pkg.get('version') == '2.3.0', 'package.json 版本', pkg.get('version'))
+    add(bool(re.match(r'^\d+\.\d+\.\d+$', pkg.get('version') or '')), 'package.json 版本', pkg.get('version'))
 
     consts = read('src/shared/constants.js')
     m = re.search(r"APP_VERSION:\s*'([^']+)'", consts)
     add(bool(m) and m.group(1) == pkg.get('version'), '版本一致', f"constants={m.group(1) if m else '?'}")
 
-    # 引擎链（v2.3.1 起）：本地 NVSA（SAPI）优先 → espeak（仅沙箱验证）→ Edge 在线兜底
+    # 引擎链（v2.4.0）：本地 NVSA（SAPI）优先 → espeak（仅沙箱验证）→ Edge 在线兜底
     backends = os.listdir(os.path.join(ROOT, 'src/main/backends'))
     for need in ['sapiBackend.js', 'edgeTtsBackend.js', 'espeakBackend.js', 'index.js']:
         add(need in backends, f'引擎后端在位 {need}', '')
@@ -71,8 +71,8 @@ def main():
                     hits.append(f'{os.path.relpath(p, ROOT)} -> {b}')
     add(not hits, '旧引擎代码残留', '未命中' if not hits else '；'.join(hits[:5]))
 
-    # 划词热键（v2.3.1 起默认 Ctrl+Alt+R；F1 仅为可选预设）
-    add("DEFAULT_HOTKEY: 'Ctrl+Alt+R'" in consts, '默认热键 Ctrl+Alt+R', 'constants 中已配置')
+    # 划词热键（v2.4.0 起默认 F1；Ctrl+Alt+R 为备选预设）
+    add("DEFAULT_HOTKEY: 'F1'" in consts, '默认热键 F1', 'constants 中已配置')
     add('readSelection' in read('src/main/selectionReader.js'), '划词读取实现', 'selectionReader.js')
     add("globalShortcut.register" in read('src/main/hotkeyTray.js'), '全局热键注册', 'hotkeyTray.js')
 

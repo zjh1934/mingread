@@ -114,7 +114,7 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
             noWrap
             sx={{ display: { xs: 'none', sm: 'block' } }}
           >
-            选中文字按 Ctrl+Alt+R 即读 · 晓晓 / 云希
+            选中文字按 F1 即读 · 晓晓 / 云希
           </Typography>
         </Box>
 

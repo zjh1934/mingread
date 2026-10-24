@@ -26,7 +26,7 @@ import announcer from '../services/announcer';
 import statusHistory from '../services/statusHistory';
 import { fs, su, THEME_MODES, THEME_MODE_LABELS } from '../theme'; // α：px → rem/calc，随字号档位缩放
 
-const HOTKEY_CHIPS = ['Ctrl+Alt+R', 'F1', 'Ctrl+Alt+F1', 'Shift+F1'];
+const HOTKEY_CHIPS = ['F1', 'Ctrl+Alt+R', 'Ctrl+Alt+F1', 'Shift+F1'];
 const TABS = [
   { key: 'read', label: '朗读' },
   { key: 'hotkey', label: '热键' },
@@ -216,7 +216,7 @@ export default function SettingsDialog({ open, onClose, status, notify }) {
 
   const applyHotkey = useCallback(
     async (nextRaw) => {
-      const next = String(nextRaw || '').trim() || 'Ctrl+Alt+R';
+      const next = String(nextRaw || '').trim() || 'F1';
       if (next === hotkey) return;
       setHotkeyDraft(next);
       try {

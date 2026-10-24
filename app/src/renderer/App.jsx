@@ -20,7 +20,7 @@ import TuningPanel from './components/TuningPanel';
 import SettingsDialog from './components/SettingsDialog';
 
 const SAMPLE_TEXT =
-  '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 Ctrl+Alt+R，可以直接朗读选中的内容，不会覆盖这里的文本。';
+  '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
 
 function bridge() {
   return typeof window !== 'undefined' ? window.langdu : null;
@@ -129,7 +129,7 @@ export default function App() {
     let off;
     try {
       off = bridge()?.onHotkeyConflict?.((payload) => {
-        const acc = (payload && payload.accelerator) || useSettings.getState().hotkey || 'Ctrl+Alt+R';
+        const acc = (payload && payload.accelerator) || useSettings.getState().hotkey || 'F1';
         // 视觉给完整解决路径，语音只说结论 + 下一步
         notify(
           `热键 ${acc} 被其他程序占用，选中朗读暂不可用。请关闭占用 ${acc} 的程序，或在 设置 → 热键 中更换`,
@@ -403,7 +403,7 @@ export default function App() {
         // 否则同一次触发会响两声（热键路径主进程已 cue + 这里再 cue）。
         const content = payload && payload.text ? String(payload.text).trim() : '';
         if (!content) {
-          notify('没有选中文字：先在任意程序里选中一段文字再按 Ctrl+Alt+R（或单击桌面悬浮球）', 'warning', {
+          notify('没有选中文字：先在任意程序里选中一段文字再按 F1（或单击桌面悬浮球）', 'warning', {
             say: false,
             duration: 6000,
           });
@@ -816,7 +816,7 @@ export default function App() {
             </Tooltip>
             <Box sx={{ flex: 1 }} />
             <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              在任意程序选中文字后按 Ctrl+Alt+R，随时朗读
+              在任意程序选中文字后按 F1，随时朗读
             </Typography>
           </Box>
 

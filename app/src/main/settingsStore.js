@@ -1,11 +1,10 @@
 // 应用设置持久化（userData/settings.json）
 // v2.3：settings.json 是 hotkey / clipboardAuto / floatBallEnabled / floatBallPos 的系统设置权威源。
-//       默认唯一热键 F1；启动时把 v2.0 遗留的旧默认热键（Control+Alt+S）迁移为 F1 并立即落盘。
-// v2.3.1（无障碍基线 P1-9 / P2-11）：
-//       - 默认热键改为 Ctrl+Alt+R（F1 是 Windows 通用「帮助」键，语义冲突，仅保留为可选预设）；
-//       - 复制即读 clipboardAuto 默认开（低视力用户看清屏幕文字费劲，是刚需）；
-//       - 旧配置兼容：仅当已存值等于历史默认值（F1 / Control+Alt+S）时才迁移为新默认，
-//         用户自选热键一律保留，不强行改掉。
+// v2.4.0（用户 2026-10-24 明确要求）：默认热键回到 F1（"选中文字按 F1 即读"），推翻 v2.3.1 的
+//       Ctrl+Alt+R 默认（基线 P2-11 的"帮助键语义冲突"顾虑让位于用户明确意愿；Ctrl+Alt+R 降为备选）。
+//       复制即读 clipboardAuto 默认开（低视力用户看清屏幕文字费劲，是刚需）。
+//       旧配置兼容：仅当已存值等于历史默认值（Control+Alt+S / Ctrl+Alt+R）时才迁移为新默认 F1，
+//       用户自选热键一律保留，不强行改掉。
 'use strict';
 
 const fs = require('fs');
@@ -16,10 +15,10 @@ const { ZOOM_DEFAULTS } = require('./zoomController');
 
 let _settingsPath = null;
 
-/** v2.3.1 默认热键（基线 P2-11）：Ctrl+Alt+R。F1 仅作为设置里的可选预设保留 */
-const DEFAULT_HOTKEY = 'Ctrl+Alt+R';
+/** v2.4.0 默认热键：F1（用户明确要求；Ctrl+Alt+R 为备选预设） */
+const DEFAULT_HOTKEY = 'F1';
 /** 历史默认热键：见到它一律迁移为新默认（用户自选值不在其列，保留不动） */
-const LEGACY_DEFAULT_HOTKEYS = ['F1', 'Control+Alt+S'];
+const LEGACY_DEFAULT_HOTKEYS = ['Control+Alt+S', 'Ctrl+Alt+R'];
 
 function settingsPath() {
   if (!_settingsPath) {
@@ -44,7 +43,7 @@ function defaults() {
     pitch: C.PITCH_DEFAULT,
     volume: C.VOLUME_DEFAULT,
     theme: 'auto',
-    // v2.3.1：默认热键 Ctrl+Alt+R（基线 P2-11，F1 仅留作可选预设）
+    // v2.4.0：默认热键 F1（用户明确要求，Ctrl+Alt+R 为备选）
     hotkey: DEFAULT_HOTKEY,
     // v2.3.1 剪贴板「复制即读」：低视力场景刚需，默认开（基线 P1-9），带节流与长度上限；
     // 用户可在设置里关掉（存了 false 的老配置不受影响）
@@ -81,15 +80,15 @@ function getSettings() {
   try {
     const j = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
     const merged = { ...d, ...j };
-    // 启动迁移：热键为空或等于历史默认值（F1 / Control+Alt+S）→ Ctrl+Alt+R，并立即持久化一次。
-    // 用户自选值（如 Ctrl+Alt+F1）不在 LEGACY_DEFAULT_HOTKEYS 里，原样保留
+    // 启动迁移：热键为空或等于历史默认值（Control+Alt+S / Ctrl+Alt+R）→ F1，并立即持久化一次。
+    // 用户自选值（如 Ctrl+Alt+F1 / Shift+F1）不在 LEGACY_DEFAULT_HOTKEYS 里，原样保留
     if (!merged.hotkey || LEGACY_DEFAULT_HOTKEYS.indexOf(merged.hotkey) !== -1) {
       merged.hotkey = DEFAULT_HOTKEY;
       persist(merged);
     }
     return merged;
   } catch (e) {
-    // 文件不存在/损坏：返回默认值（hotkey 已是 Ctrl+Alt+R，无需迁移）
+    // 文件不存在/损坏：返回默认值（hotkey 已是 F1，无需迁移）
     return d;
   }
 }

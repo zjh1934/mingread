@@ -1,5 +1,6 @@
-// 全局热键 + 系统托盘。默认热键 Ctrl+Alt+R（v2.3.1 起，基线 P2-11：F1 是 Windows 通用
-// 「帮助」键，语义冲突，仅保留为设置里的可选预设）：在任意位置选中文字后按热键直接朗读。
+// 全局热键 + 系统托盘。默认热键 F1（v2.4.0 起，用户 2026-10-24 明确要求"选中文字按 F1 即读"，
+// 推翻基线 P2-11 的 Ctrl+Alt+R 默认；Ctrl+Alt+R 降为设置里的备选预设）：在任意位置选中
+// 文字后按热键直接朗读。F1 被占用时（典型：旧版「朗读女」常驻）语音引导退出 + 自动重试注册。
 // v2.2：注册结果可观测（console.log + isRegistered()），失败时托盘气泡 + 主窗口 hotkey:conflict 事件。
 // v2.3.1（三项修复，均为低视力可用性红线）：
 //   1. 注册失败除托盘气泡/窗口事件外，必须经 a11yFeedback.announce 语音播报
@@ -21,8 +22,8 @@ const a11y = require('./a11yFeedback');
 // 抓选区会短暂改写剪贴板：告知剪贴板监视器静默，避免被误判成「用户又复制了一次」
 const { suppressAutoRead } = require('./clipboardMonitor');
 
-/** v2.3.1 默认热键（基线 P2-11）。F1 仅作为可选预设保留在设置界面 */
-const DEFAULT_HOTKEY = 'Ctrl+Alt+R';
+/** v2.4.0 默认热键：F1（用户明确要求；Ctrl+Alt+R 为备选预设） */
+const DEFAULT_HOTKEY = 'F1';
 
 function trayIcon() {
   const candidates = [];
@@ -45,6 +46,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
   let tray = null;
   let busy = false;
   let registered = false;
+  let disposed = false;
   /** 本模块自己注册成功的朗读热键；只注销它，绝不动别人（缩放）的热键 */
   let registeredAccel = '';
 
@@ -99,7 +101,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     // 与主窗口是否聚焦/可见无关；announce 内部有 800ms 去重，重复注册失败不会刷屏
     try {
       const p = a11y.announce({
-        text: `热键 ${accelerator} 被其他程序占用，朗读暂不可用，请在设置中更换热键。`,
+        text: `热键 ${accelerator} 被其他程序占用，朗读暂不可用。常见原因是旧版朗读女正在运行，请退出后会自动重试，或在设置中更换热键。`,
         priority: 'high',
       });
       if (p && typeof p.then === 'function') {
@@ -195,8 +197,8 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     tray = null;
   }
 
-  /** 注册（或重注册）全局热键；返回是否成功 */
-  const register = () => {
+  /** 实际执行一次注册尝试（不触发冲突播报/自动重试），返回是否成功 */
+  const tryRegister = () => {
     const hk = getHotkey() || DEFAULT_HOTKEY;
     // v2.3.1：只精准注销自己上一个朗读热键。不再用 globalShortcut.unregisterAll()——
     // 那会把 zoomController 的 Ctrl+Alt+=/-/0 缩放热键一起清掉，旧代码靠事后补注册兜底，
@@ -220,8 +222,12 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     }
     if (registered) registeredAccel = hk;
     console.log(`[hotkey] register accelerator=${hk} ok=${registered}`);
-    if (!registered) reportConflict(hk);
-    // 菜单热键标签 / 提示语随实际热键刷新
+    return registered;
+  };
+
+  /** 托盘菜单/提示语随实际热键刷新 */
+  function refreshTrayLabel() {
+    const hk = getHotkey() || DEFAULT_HOTKEY;
     try {
       if (tray && !tray.isDestroyed()) {
         tray.setContextMenu(buildMenu());
@@ -230,7 +236,67 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     } catch (e) {
       /* noop */
     }
-    return registered;
+  }
+
+  /** 重试恢复成功时播报一次（与冲突播报形成闭环；启动即成功不播，避免噪音） */
+  function announceReady() {
+    try {
+      const hk = getHotkey() || DEFAULT_HOTKEY;
+      const p = a11y.announce({
+        text: `朗读热键 ${hk} 已就绪，选中文字后按 ${hk} 即可朗读。`,
+        priority: 'high',
+      });
+      if (p && typeof p.then === 'function') p.catch(() => {});
+    } catch (e) {
+      /* 播报通道异常不影响注册 */
+    }
+  }
+
+  /** v2.4.0：热键被占用时的有界自动重试。典型场景：旧版「朗读女」常驻占 F1，用户退出后
+   *  新版几秒内自动接管并语音告知。RETRY_MAX 次（约 10 分钟）后停止，不无限循环；
+   *  之后用户可在设置里更换热键，或重启应用再次重试。 */
+  const RETRY_INTERVAL_MS = 5000;
+  const RETRY_MAX = 120;
+  let retryTimer = null;
+  let retryCount = 0;
+  let conflictActive = false;
+  const stopRetry = () => {
+    if (retryTimer) {
+      clearInterval(retryTimer);
+      retryTimer = null;
+    }
+    retryCount = 0;
+  };
+  const startRetry = () => {
+    if (retryTimer || disposed) return;
+    retryCount = 0;
+    retryTimer = setInterval(() => {
+      retryCount += 1;
+      if (disposed || retryCount > RETRY_MAX) {
+        stopRetry();
+        if (!disposed) console.log('[hotkey] conflict auto-retry gave up (~10min)');
+        return;
+      }
+      register();
+    }, RETRY_INTERVAL_MS);
+  };
+
+  /** 注册（或重注册）全局热键；返回是否成功。失败：播报冲突 + 启动自动重试；重试恢复：播报就绪 */
+  const register = () => {
+    const hk = getHotkey() || DEFAULT_HOTKEY;
+    const ok = tryRegister();
+    if (!ok) {
+      if (!conflictActive) reportConflict(hk); // 仅状态变化时播报，重试期间不刷屏
+      conflictActive = true;
+      startRetry();
+    } else {
+      const recovered = conflictActive;
+      conflictActive = false;
+      stopRetry();
+      if (recovered) announceReady();
+    }
+    refreshTrayLabel();
+    return ok;
   };
   register();
 
@@ -239,6 +305,8 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     reregister: register,
     isRegistered: () => registered,
     dispose: () => {
+      disposed = true;
+      stopRetry();
       try {
         if (tray) tray.destroy();
       } catch (e) {
