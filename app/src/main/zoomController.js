@@ -610,6 +610,14 @@ function createZoomController(opts) {
       return;
     }
     state.targetZoom = next;
+    // v3.0.0：滚轮路径**不做缓动**，立即生效（用户：「滚轮调整大小时候不需要动画，就默认那种就行」）。
+    // 直接赋值 state.zoom 并清空原点，下一帧就按新倍率和新原点出画：
+    //   · 不赋值 → step() 要按 zoomSmoothing 指数逼近，滚一下有几十毫秒的拖尾；
+    //   · 不清空 oX/oY → 位置仍走 zoomFollowSmoothing，缩放时画面会「漂」一下。
+    // 键盘档位（bump）保持原来的平滑，那里需要过渡感，且用户没提出异议。
+    state.zoom = next;
+    state.oX = null;
+    state.oY = null;
     state.lastStepAt = Date.now();
     notifyRenderer();
   }
