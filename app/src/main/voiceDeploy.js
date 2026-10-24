@@ -1074,15 +1074,26 @@ class VoiceDeploy {
       // eslint-disable-next-line global-require
       const { getBridge } = require('./ttsBridge');
       const bridge = getBridge();
-      // 关键：注册后必须重探（SAPI 语音列表在进程内缓存），refreshEngines 会重置长驻通道
-      if (typeof bridge.refreshEngines === 'function') await bridge.refreshEngines();
-      const r = await bridge.synthesize('测试', { voiceId: 'sapi:xiaoxiao' });
-      const bytes = r && r.audioData ? r.audioData.length : 0;
-      if (r && r.engine !== 'sapi') {
-        return { ok: false, message: `试合成走到了 ${r.engine} 引擎（本地语音仍不可用）` };
+      // 注册刚完成时，SAPI 对新注册 DLL 的枚举有秒级延迟：本机实测出现过
+      // 「voiceDeploy 自己的新进程枚举已能看到晓晓/云希，但紧接着的通道探测仍返回旧列表」
+      // —— 于是试合成走了 edge、状态机误判 FAILED_VERIFY（用户会看到「装好了却说失败」）。
+      // 因此这里 refreshEngines + 试合成做 3 轮退避重试，容忍这个生效窗口。
+      let lastMsg = '试合成未执行';
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        // 关键：注册后必须重探（SAPI 语音列表在进程内缓存），refreshEngines 会重置长驻通道
+        if (typeof bridge.refreshEngines === 'function') await bridge.refreshEngines();
+        const r = await bridge.synthesize('测试', { voiceId: 'sapi:xiaoxiao' });
+        const bytes = r && r.audioData ? r.audioData.length : 0;
+        if (r && r.engine === 'sapi' && bytes > 0) {
+          return { ok: true, bytes, format: r.format, sampleRate: r.sampleRate, durationMs: r.durationMs, attempt };
+        }
+        lastMsg =
+          r && r.engine !== 'sapi'
+            ? `试合成走到了 ${r.engine} 引擎（本地语音仍不可用）`
+            : '试合成没有返回音频数据';
+        if (attempt < 3) await new Promise((res) => setTimeout(res, 900));
       }
-      if (!bytes) return { ok: false, message: '试合成没有返回音频数据' };
-      return { ok: true, bytes, format: r.format, sampleRate: r.sampleRate, durationMs: r.durationMs };
+      return { ok: false, message: lastMsg };
     } catch (e) {
       return { ok: false, message: tail(e.message || String(e), 240) };
     }

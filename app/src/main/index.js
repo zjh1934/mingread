@@ -121,6 +121,10 @@ function createWindow() {
         }, 1200 + waitMs);
         return; // 播放捕获模式下不走常规 capture 流程
       }
+      // v2.4.0：--capture-delay=<ms> 延迟截图。did-finish-load 时 VoiceDeployGate 等组件的
+      // IPC 状态还没回来，立即截图会拍成「未加载」的初始帧（每次字节数都一样）。
+      const delayArg = process.argv.find((a) => a.startsWith('--capture-delay='));
+      const capDelay = delayArg ? Math.max(0, Number(delayArg.split('=')[1]) || 0) : 0;
       setTimeout(async () => {
         try {
           const img = await win.webContents.capturePage();
@@ -148,7 +152,7 @@ function createWindow() {
           return;
         }
         setTimeout(() => app.quit(), 300);
-      }, 3500);
+      }, 3500 + capDelay);
     });
     return win;
   }
@@ -187,6 +191,20 @@ function bootstrap() {
     }
     createWindow();
     ipcApi = registerIpc(getMainWindow, state);
+    // v2.4.0 离线语音：启动时后台跑一次检测，否则 voiceDeploy 状态一直停在 IDLE，
+    // VoiceDeployGate 会对着「已经装好」的用户显示「未安装」引导卡片（本机实测踩到）。
+    // 不 await：检测要枚举系统语音（新进程，几百毫秒），不能挡首屏。
+    try {
+      // eslint-disable-next-line global-require
+      const voiceDeploy = require('./voiceDeploy').getVoiceDeploy();
+      setImmediate(() => {
+        voiceDeploy.detect({ announce: false }).catch((e) => {
+          console.warn('[voiceDeploy] startup detect failed:', e && e.message);
+        });
+      });
+    } catch (e) {
+      /* 容错：离线语音引导不可用不影响朗读 */
+    }
     // v2.3 屏幕缩放（LensZoom 集成）：无论 zoomEnabled 初始值如何都 start()——
     // start() 只安装滚轮钩子/热键并跑渲染循环，不会主动激活画面；激活只发生在用户触发时
     // （onWheel / Ctrl+Alt+= / nudge 均校验 zoomEnabled）。初始 zoomEnabled=false 的用户

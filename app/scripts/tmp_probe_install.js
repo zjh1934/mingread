@@ -11,10 +11,25 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+
+// 关键：模拟真实 app 的 userData。
+// 用 `electron scripts/xxx.js` 启动时没有加载 app 的 package.json，productName 缺失，
+// app.getPath('userData') 会变成 %APPDATA%\Electron（纯 ASCII）→ voiceDeploy 不会走
+// 「非 ASCII 退回 %LOCALAPPDATA%\langdu-nv\voice-pack」这条分支，于是它会去另一个目录
+// 重新下载 142MB。必须在 require voiceDeploy 之前把 userData 设成真实值。
+try {
+  const realUserData = path.join(process.env.APPDATA || '', '朗读女 Neo');
+  app.setPath('userData', realUserData);
+} catch (e) {
+  console.log('[warn] setPath userData failed: ' + ((e && e.message) || e));
+}
+
 const { getVoiceDeploy } = require('../src/main/voiceDeploy');
 
 const OUT = path.join(__dirname, '..', 'dist', 'probe', 'install.json');
 const T0 = Date.now();
+// --detect-only：只做检测（确认 workDir / 四项检查），不下载、不提权
+const DETECT_ONLY = process.argv.includes('--detect-only');
 
 app.whenReady().then(async () => {
   const log = { at: new Date().toISOString(), states: [], detect: null, result: null, error: null };
@@ -41,20 +56,25 @@ app.whenReady().then(async () => {
       console.log('[detect] error ' + ((e && e.message) || e));
     }
 
-    try {
-      // install(): 幂等可重入，已下载/已解压/已注册会跳过对应阶段
-      const r = await vd.install();
-      log.result = {
-        ok: !!(r && r.ok),
-        state: r && r.state,
-        code: r && r.code,
-        message: r && r.message,
-        alreadyReady: !!(r && r.alreadyReady),
-      };
-      console.log('[install] ' + JSON.stringify(log.result));
-    } catch (e) {
-      log.error = 'install: ' + ((e && e.message) || e);
-      console.log('[install] error ' + log.error);
+    if (DETECT_ONLY) {
+      log.detectOnly = true;
+      console.log('[detect-only] 跳过 install');
+    } else {
+      try {
+        // install(): 幂等可重入，已下载/已解压/已注册会跳过对应阶段
+        const r = await vd.install();
+        log.result = {
+          ok: !!(r && r.ok),
+          state: r && r.state,
+          code: r && r.code,
+          message: r && r.message,
+          alreadyReady: !!(r && r.alreadyReady),
+        };
+        console.log('[install] ' + JSON.stringify(log.result));
+      } catch (e) {
+        log.error = 'install: ' + ((e && e.message) || e);
+        console.log('[install] error ' + log.error);
+      }
     }
 
     // 装完再探一次：确认引擎真的可用（不只是状态机说成功）

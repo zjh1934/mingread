@@ -64,6 +64,23 @@ app.whenReady().then(async () => {
     result.audioError = (e && e.message) || String(e);
   }
 
+  // ---- 预热（不计入统计）----
+  // NVSA 神经语音首次合成要加载模型（本机实测 ~590ms）。真实使用时这段由 index.js
+  // 启动期的 bridge.warmup() 承担，不是「按 F1 到出声」的体感延迟，故单独记 coldStartMs。
+  let coldStartMs = null;
+  if (bridge) {
+    try {
+      const tc = Date.now();
+      await bridge.synthesize(SENTENCE);
+      coldStartMs = Date.now() - tc;
+      result.coldStartMs = coldStartMs;
+      result.coldStartEngine = (bridge.getEngineStatus && bridge.getEngineStatus().active) || null;
+    } catch (e) {
+      result.coldStartMs = null;
+      result.coldStartError = (e && e.message) || String(e);
+    }
+  }
+
   for (let i = 0; i < RUNS; i += 1) {
     const row = { run: i + 1 };
 
@@ -129,6 +146,7 @@ app.whenReady().then(async () => {
 
   result.summary = {
     engine: engines.join('+') || null,
+    coldStartMs,
     cueP95Ms: pct(cue, 95),
     synthP50Ms: pct(synth, 50),
     synthP95Ms: pct(synth, 95),
