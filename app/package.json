@@ -19,6 +19,9 @@
     "build:renderer": "vite build",
     "build": "vite build && electron-builder",
     "dist": "vite build && electron-builder --win nsis zip",
+    "pack": "electron-builder --win nsis zip",
+    "pack:dir": "electron-builder --win --dir",
+    "pack:zip": "electron-builder --win zip",
     "check": "node scripts/check-syntax.js",
     "selfcheck": "python scripts/selfcheck_all.py"
   },

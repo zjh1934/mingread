@@ -1,0 +1,25 @@
+floatball.html sha public=57ecf335838d dist=57ecf335838d same
+dom: {"cls":"st-idle","title":"朗读女 Neo · 单击朗读当前选中文字","size":"56x56","radius":"50%","bg":"linear-gradient(160deg, rgb(74, 82, 97) 0%, rgb(22, 27, 38) 100%)","shadow":"rgba(16, 24, 40, 0.18) 0px 1px 2px 0px, rgba(16, 24, 40, 0.22) 0px 2px 6px 0px, rgba(255, 255, 255, 0.2) 0px 1px 0px 0px inset","svg":"23.5156px/rgb(255, 255, 255)/rgb(255, 255, 255)"}
+captured qa-wui2-floatball-idle-56.png 56x56
+menu@56: {"itemMinH":"44px","menuH":379,"fitsMainClamp":true}
+--- state ---
+st-playing: {"cls":"st-playing","title":"正在朗读 · 单击可重新朗读选中文字","speaker":"none","pause":"block","badge":"none","bg":"linear-gradient(160deg, rgb(169, 150, 255) 0%, rgb(107, 91, 255) 100%)"}
+st-buffering: {"cls":"st-buffering","title":"朗读女 Neo · 单击朗读当前选中文字","svgColor":"rgb(22, 27, 38)","svgFill":"rgb(22, 27, 38)","bg":"linear-gradient(160deg, rgb(251, 191, 36) 0%, rgb(196, 127, 0) 100%)"}
+st-conflict: {"cls":"st-conflict","title":"热键 F1 被占用，请在设置中更换或关闭占用程序","badge":"block","badgeBg":"rgb(217, 52, 74)","pause":"none"}
+size-112: {"cssVar":"112px","box":"112x112","body":112}
+--- click ---
+click cmds: [{"evt":"dragStart"},{"cmd":"read"}]
+captured qa-wui2-floatball-playing-112.png 112x112
+--- drag ---
+drag cmds: [{"evt":"dragStart"},{"evt":"dragMove","d":{"dx":20,"dy":5}},{"evt":"dragMove","d":{"dx":80,"dy":40}},{"evt":"dragEnd"}]
+--- context menu ---
+menu open: {"menu":"present","items":8,"seps":2,"labels":["朗读选中文字","播放","暂停","停止","放大一档","缩小一档","退出缩放","隐藏悬浮球"],"bg":"rgb(255, 255, 255)","color":"rgb(22, 27, 38)","radius":"20.16px","border":"1px rgba(16, 24, 40, 0.14)","shadow":"rgba(16, 24, 40, 0.14) 0px 2px 4px 0px, rgba(16, 24, 40, 0.2","itemMinH":"67.2px","menuH":588,"menuW":376,"fitsMainClamp":true}
+captured qa-wui2-floatball-menu.png 430x640
+after menu click: cmds=[{"cmd":"menu","open":false,"width":0,"height":0},{"cmd":"menu","open":true,"width":377,"height":589},{"cmd":"read"},{"cmd":"menu","open":false,"width":0,"height":0}] menu=false
+menu closed by outside mousedown: true
+menu closed by Escape: true
+menu zoomIn cmd: [{"cmd":"menu","open":false,"width":0,"height":0},{"cmd":"menu","open":true,"width":377,"height":589},{"cmd":"zoomIn"},{"cmd":"menu","open":false,"width":0,"height":0}]
+captured qa-wui2-floatball-conflict-112.png 112x112
+captured qa-wui2-floatball-playing-112.png 112x112
+--- no bridge ---
+no-bridge dom: {"ball":true,"cls":"st-idle"}

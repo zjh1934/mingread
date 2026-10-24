@@ -1,13 +1,13 @@
-// 视觉增强 + 屏幕缩放（复刻 macOS 缩放）设置分区。α-视觉增强 Agent 独占。
-// 数据契约（主进程工程师并行集成中，字段名以此为准）：
+// 屏幕缩放（LensZoom，复刻 macOS 缩放）设置分区。
+// v2.4.0 W-UI1：原「视觉增强」（字号档位 / 对比度主题 / 悬浮球尺寸）已迁到设置的「无障碍」分区，
+// 这里只留缩放本身，避免同一项设置在两处出现、改一处不生效的错觉。
+// 数据契约：
 //   window.langdu.zoom.get() => {zoomEnabled, zoomModifier, zoomFollowMode, zoomMin, zoomMax,
 //     zoomInteger, zoomSmoothing, zoomSwallowScroll, zoomClickThrough, zoomShowHud, zoomFrameLimit,
 //     zoomTrigger, zoomEdgeEnhance, zoomOutline, zoomOutlineColor, zoomContrast, zoomColorMode,
 //     zoomCrosshair, zoomFocusRing, zoomFollowSmoothing, zoomHudFont, zoomAnnounce,
 //     active, paused, zoom, backend, trigger, fps}
 //   set(patch) / togglePause() / nudge(up) / reset() / onChanged(cb) -> {active, zoom, paused, trigger}
-// 视觉增强（字号档位 / 悬浮球尺寸）走主进程 settings.json：
-//   window.langdu.getSystemSettings() / saveSystemSettings({fontScale, floatBallSize})
 // 桥不存在时（主进程未就绪）整体静默降级，不白屏、不报错。
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -23,36 +23,15 @@ import {
   Slider,
   Stack,
   Switch,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 
-import { useSettings } from '../store/settingsStore';
 import statusHistory from '../services/statusHistory';
-import {
-  BALL_SIZE_LABELS,
-  BALL_SIZE_STEPS,
-  FONT_SCALE_LABELS,
-  FONT_SCALE_STEPS,
-  THEME_MODE_LABELS,
-  THEME_MODES,
-  getFontScale,
-  setFontScale,
-  su,
-} from '../theme';
+import { fs, su } from '../theme';
 
 function zoomApi() {
   try {
     return (typeof window !== 'undefined' && window.langdu && window.langdu.zoom) || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function sysApi() {
-  try {
-    return (typeof window !== 'undefined' && window.langdu) || null;
   } catch (e) {
     return null;
   }
@@ -98,32 +77,71 @@ const HOTKEY_HINT = '热键：Ctrl+Alt+= 放大 · Ctrl+Alt+- 缩小 · Ctrl+Alt
 // Slider thumb 尺寸由 theme.js 的 MuiSlider 全局统一下发（28px × --ldn-scale），
 // 这里不再重复定义，避免两处真源走歧。
 
-function SwitchRow({ label, checked, onChange, caption }) {
+// 开关行：状态除位置/填充外，再用「已开启 / 已关闭」文字冗余编码（低视力 + 色弱可辨），
+// 并通过 aria-labelledby / aria-describedby 让读屏念出「控制项 + 当前状态 + 说明」。
+function SwitchRow({ id, label, checked, onChange, caption }) {
+  const labelId = `${id}-label`;
+  const stateId = `${id}-state`;
+  const captionId = caption ? `${id}-desc` : undefined;
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="body2" sx={{ flex: 1 }}>
-          {label}
-        </Typography>
-        <Switch checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Typography id={labelId} variant="body1" sx={{ fontWeight: 600 }}>
+              {label}
+            </Typography>
+            <Box
+              component="span"
+              id={stateId}
+              sx={{
+                px: 1,
+                py: 0.125,
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: checked ? 'primary.main' : 'divider',
+                color: checked ? 'primary.main' : 'text.secondary',
+                fontSize: fs(12.5),
+                fontWeight: 700,
+                lineHeight: 1.6,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {checked ? '已开启' : '已关闭'}
+            </Box>
+          </Stack>
+          {caption && (
+            <Typography id={captionId} variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+              {caption}
+            </Typography>
+          )}
+        </Box>
+        <Switch
+          checked={!!checked}
+          onChange={(e) => onChange(e.target.checked)}
+          // 主题里 Switch 是 62×42：上下各补 12px 内边距 → 可点区域 62×48（低视力目标 ≥44），
+          // 左右内边距不动，滑块与轨道的位置保持原样
+          sx={{ height: su(48), '& .MuiSwitch-switchBase': { paddingTop: su(12), paddingBottom: su(12) } }}
+          inputProps={{
+            'aria-labelledby': labelId,
+            'aria-describedby': [stateId, captionId].filter(Boolean).join(' '),
+          }}
+        />
       </Stack>
-      {caption && (
-        <Typography variant="caption" color="text.secondary">
-          {caption}
-        </Typography>
-      )}
     </Box>
   );
 }
 
 /** 数值 Slider：拖动中不发 IPC，松手才落盘 */
-function NumSlider({ label, value, min, max, step, onChangeCommitted, format, caption }) {
+function NumSlider({ id, label, value, min, max, step, onChangeCommitted, format, caption }) {
   const [draft, setDraft] = useState(null);
   const cur = draft != null ? draft : value;
+  const shown = format ? format(cur) : cur;
+  const captionId = caption ? `${id}-desc` : undefined;
   return (
     <Box>
-      <Typography variant="caption" color="text.secondary">
-        {label}：{format ? format(cur) : cur}
+      <Typography variant="body2" component="p" id={`${id}-label`} sx={{ fontWeight: 600 }}>
+        {label}：<Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>{shown}</Box>
       </Typography>
       <Slider
         valueLabelDisplay="auto"
@@ -136,10 +154,12 @@ function NumSlider({ label, value, min, max, step, onChangeCommitted, format, ca
           setDraft(null);
           onChangeCommitted(v);
         }}
-        aria-label={label}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={captionId}
+        getAriaValueText={() => String(shown)}
       />
       {caption && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        <Typography id={captionId} variant="body2" color="text.secondary" sx={{ display: 'block' }}>
           {caption}
         </Typography>
       )}
@@ -154,70 +174,6 @@ export default function ZoomSettings({ notify }) {
   // Slider 拖动期间用草稿值，松手才下发，避免每像素一次 IPC
   const [maxDraft, setMaxDraft] = useState(null);
   const [smoothDraft, setSmoothDraft] = useState(null);
-
-  // ---- 视觉增强（低视力 P0）----
-  const themeMode = useSettings((s) => s.themeMode);
-  const setStore = useSettings((s) => s.set);
-  const [scale, setScale] = useState(() => getFontScale());
-  const [ballSize, setBallSize] = useState(56);
-
-  useEffect(() => {
-    let alive = true;
-    sysApi()
-      ?.getSystemSettings?.()
-      .then((s) => {
-        if (!alive || !s) return;
-        if (s.fontScale != null) {
-          setScale(setFontScale(s.fontScale)); // theme.js：改 CSS 变量，全界面即时生效
-        }
-        if (s.floatBallSize != null) setBallSize(Number(s.floatBallSize));
-      })
-      .catch(() => {
-        /* 主进程未就绪时保持默认档位 */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const saveSystem = useCallback(
-    async (patch, okMsg) => {
-      try {
-        const r = await sysApi()?.saveSystemSettings?.(patch);
-        if (r && r.ok === false) throw new Error(r.error || '主进程拒绝保存');
-        if (okMsg) notify?.(okMsg, 'success');
-      } catch (e) {
-        notify?.(`设置保存失败：${(e && e.message) || e}`, 'error');
-      }
-    },
-    [notify]
-  );
-
-  const handleScale = useCallback(
-    (v) => {
-      const next = setFontScale(v); // 立即生效（CSS 变量），无需重建 theme
-      setScale(next);
-      saveSystem({ fontScale: next });
-    },
-    [saveSystem]
-  );
-
-  const handleTheme = useCallback(
-    (v) => {
-      if (!v) return;
-      setStore({ themeMode: v });
-    },
-    [setStore]
-  );
-
-  const handleBallSize = useCallback(
-    (v) => {
-      if (!v) return;
-      setBallSize(Number(v));
-      saveSystem({ floatBallSize: Number(v) });
-    },
-    [saveSystem]
-  );
 
   useEffect(() => {
     let alive = true;
@@ -292,101 +248,21 @@ export default function ZoomSettings({ notify }) {
   const zoomTrigger = (cfg && cfg.zoomTrigger) || 'auto';
 
   return (
-    <Box sx={{ mt: 1 }}>
-      {/* ================= 视觉增强（低视力 P0）================= */}
-      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-        视觉增强
-      </Typography>
-
-      <Stack spacing={1.5} sx={{ mt: 1.25 }}>
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            字号档位
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-            全界面字号、间距、按钮与滑块一起放大，切换即时生效
-          </Typography>
-          <ToggleButtonGroup
-            exclusive
-            value={scale}
-            onChange={(_e, v) => handleScale(v)}
-            aria-label="字号档位"
-            sx={{ flexWrap: 'wrap' }}
-          >
-            {FONT_SCALE_STEPS.map((s) => (
-              <ToggleButton key={s} value={s} sx={{ textTransform: 'none' }}>
-                {FONT_SCALE_LABELS[s] || `${s}x`}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
-
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            对比度
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-            高对比度主题下所有文字对比度 ≥ 7:1（WCAG AAA）
-          </Typography>
-          <ToggleButtonGroup
-            exclusive
-            value={THEME_MODES.indexOf(themeMode) === -1 ? 'light' : themeMode}
-            onChange={(_e, v) => handleTheme(v)}
-            aria-label="对比度主题"
-            sx={{ flexWrap: 'wrap' }}
-          >
-            {THEME_MODES.map((m) => (
-              <ToggleButton key={m} value={m} sx={{ textTransform: 'none' }}>
-                {THEME_MODE_LABELS[m] || m}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
-
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            桌面悬浮球尺寸
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-            球体与右键菜单文字同步放大，点击更省力
-          </Typography>
-          <ToggleButtonGroup
-            exclusive
-            value={ballSize}
-            onChange={(_e, v) => handleBallSize(v)}
-            aria-label="悬浮球尺寸"
-            sx={{ flexWrap: 'wrap' }}
-          >
-            {BALL_SIZE_STEPS.map((s) => (
-              <ToggleButton key={s} value={s} sx={{ textTransform: 'none' }}>
-                {BALL_SIZE_LABELS[s] || `${s}px`}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
-      </Stack>
-
-      <Divider sx={{ my: 2 }} />
-
-      {/* ================= 屏幕缩放 LensZoom ================= */}
-      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-        屏幕缩放（复刻 macOS 缩放）
-      </Typography>
-
+    <Box>
       {missing && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           屏幕缩放模块未就绪：主进程预加载缺少 window.langdu.zoom（主进程联调中，此处暂不可设置）
         </Typography>
       )}
       {!missing && loadError && !cfg && (
-        <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+        <Typography variant="body2" color="error" sx={{ display: 'block', mb: 1 }}>
           读取屏幕缩放设置失败：{loadError}
         </Typography>
       )}
       {!missing && !cfg && !loadError && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+        <Stack direction="row" spacing={1} alignItems="center">
           <CircularProgress size={su(16)} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="body2" color="text.secondary">
             正在读取屏幕缩放设置…
           </Typography>
         </Stack>
@@ -394,16 +270,17 @@ export default function ZoomSettings({ notify }) {
 
       {cfg && (
         <>
-          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.75, flexWrap: 'wrap', rowGap: 0.5 }}>
-            <Chip size="small" variant="outlined" label={`触发：${triggerLabel(cfg)}`} />
-            <Typography variant="caption" color="text.secondary">
+          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Chip size="small" variant="outlined" label={`触发：${triggerLabel(cfg)}`} sx={{ height: su(34) }} />
+            <Typography variant="body2" color="text.secondary">
               {cfg.active ? `缩放中 ${fmtZoom(cfg.zoom)}x` : '未激活'}
               {cfg.paused ? ' · 已暂停' : ''}
             </Typography>
           </Stack>
 
-          <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+          <Stack spacing={1.75} sx={{ mt: 1.5 }}>
             <SwitchRow
+              id="zoom-enabled"
               label="启用屏幕缩放"
               checked={cfg.zoomEnabled}
               onChange={(v) => patch({ zoomEnabled: v })}
@@ -454,6 +331,7 @@ export default function ZoomSettings({ notify }) {
             </FormControl>
 
             <NumSlider
+              id="zoom-max"
               label="倍率上限"
               value={Math.min(Math.max(Number(zoomMax) || 2, 2), 32)}
               min={2}
@@ -468,6 +346,7 @@ export default function ZoomSettings({ notify }) {
             />
 
             <NumSlider
+              id="zoom-smoothing"
               label="过渡平滑度"
               value={Math.min(Math.max(Number(zoomSmoothing) || 0, 0), 0.95)}
               min={0}
@@ -482,6 +361,7 @@ export default function ZoomSettings({ notify }) {
             />
 
             <NumSlider
+              id="zoom-follow-smoothing"
               label="平移跟随平滑度"
               value={Math.min(Math.max(Number(cfg.zoomFollowSmoothing) || 0, 0), 0.95)}
               min={0}
@@ -493,6 +373,7 @@ export default function ZoomSettings({ notify }) {
             />
 
             <NumSlider
+              id="zoom-edge"
               label="边缘锐化"
               value={Math.min(Math.max(Number(cfg.zoomEdgeEnhance) || 0, 0), 1)}
               min={0}
@@ -504,6 +385,7 @@ export default function ZoomSettings({ notify }) {
             />
 
             <NumSlider
+              id="zoom-contrast"
               label="对比度增强"
               value={Math.min(Math.max(Number(cfg.zoomContrast) || 0, 0), 1)}
               min={0}
@@ -514,6 +396,7 @@ export default function ZoomSettings({ notify }) {
             />
 
             <NumSlider
+              id="zoom-outline"
               label="边缘描边"
               value={Math.min(Math.max(Number(cfg.zoomOutline) || 0, 0), 1)}
               min={0}
@@ -571,32 +454,38 @@ export default function ZoomSettings({ notify }) {
             </FormControl>
 
             <SwitchRow
+              id="zoom-focus-ring"
               label="光标焦点高亮框"
               checked={cfg.zoomFocusRing !== false}
               onChange={(v) => patch({ zoomFocusRing: v })}
               caption="在光标周围画一个高对比方框"
             />
             <SwitchRow
+              id="zoom-integer"
               label="整数倍步进（像素锐利，不模糊）"
               checked={cfg.zoomInteger}
               onChange={(v) => patch({ zoomInteger: v })}
             />
             <SwitchRow
+              id="zoom-swallow"
               label="吞掉滚轮事件（放大时不带动页面滚动）"
               checked={cfg.zoomSwallowScroll}
               onChange={(v) => patch({ zoomSwallowScroll: v })}
             />
             <SwitchRow
+              id="zoom-click-through"
               label="放大时鼠标穿透（点击仍能操作下层界面）"
               checked={cfg.zoomClickThrough}
               onChange={(v) => patch({ zoomClickThrough: v })}
             />
             <SwitchRow
+              id="zoom-hud"
               label="显示调试信息 HUD（倍率 / FPS）"
               checked={cfg.zoomShowHud}
               onChange={(v) => patch({ zoomShowHud: v })}
             />
             <SwitchRow
+              id="zoom-announce"
               label="倍率变化语音播报"
               checked={cfg.zoomAnnounce !== false}
               onChange={(v) => patch({ zoomAnnounce: v })}
@@ -605,7 +494,7 @@ export default function ZoomSettings({ notify }) {
           </Stack>
 
           <Divider sx={{ my: 1.5 }} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ display: 'block' }}>
             放大时把倍率缩回 1x 自动退出；托盘菜单与桌面悬浮球右键也可控制缩放。
             放大后按 Ctrl+Alt+方向键可平移画面（查看屏幕外内容），Ctrl+Alt+Q 在 2/4/8/16/32 倍间快速循环。
           </Typography>

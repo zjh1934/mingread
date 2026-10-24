@@ -5,10 +5,29 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
 <title>朗读女 Neo 悬浮球</title>
 <style>
-  /* α-视觉增强：球体尺寸由 --ball 驱动（56 / 80 / 112 三档），
-     图标、角标、右键菜单字号全部按同一变量派生，改档位只改一个数。 */
+  /* 视觉基线对齐主界面（theme.js buildPalette 浅色档），一处定义、处处引用：
+     紫色主色 #6b5bff / 深色档 #a996ff、纸白 #ffffff、正文 #161b26、次要 #4a5261、
+     分隔线 rgba(16,24,40,.14)、错误 #d9344a、警告 #fbbf24→#c47f00。
+     尺寸仍由 --ball 驱动（56 / 80 / 112 三档），图标、角标、菜单字号全部按同一变量派生。
+     零依赖约束：本页不引 MUI / 外部字体 / 图片，只靠内联 CSS。 */
   html {
     --ball: 56px;
+    /* ---- 主界面调色板（与 theme.js 同值，不新增色相）---- */
+    --ldn-primary: #6b5bff;
+    --ldn-primary-soft: #a996ff;
+    --ldn-paper: #ffffff;
+    --ldn-ink: #161b26;
+    --ldn-ink-2: #4a5261;
+    --ldn-divider: rgba(16, 24, 40, 0.14);
+    --ldn-error: #d9344a;
+    --ldn-error-soft: #fb7185;
+    --ldn-warning: #c47f00;
+    --ldn-warning-soft: #fbbf24;
+    --ldn-hover: rgba(107, 91, 255, 0.14); /* = action.selected（浅色） */
+    --ldn-focus: #6b5bff; /* = --ldn-focus-color */
+    /* ---- 阴影层级：与主界面 elevation 2 / 8 的观感一致（近距实 + 远距散）---- */
+    --ldn-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.18), 0 2px 6px rgba(16, 24, 40, 0.22);
+    --ldn-shadow-2: 0 2px 4px rgba(16, 24, 40, 0.14), 0 8px 24px rgba(16, 24, 40, 0.22);
   }
   /* 透明窗口：页面即球本体，无任何外部资源依赖 */
   html, body {
@@ -20,10 +39,13 @@
     background: transparent;
   }
   body {
+    font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", system-ui, -apple-system, sans-serif;
     -webkit-user-select: none;
     user-select: none;
     cursor: default;
   }
+  /* 默认 = st-idle：中性深灰（text.secondary → text.primary），静止态不抢眼，
+     但白图标对比度 ≥ 8:1，低视力用户在任意壁纸上都能找到球。 */
   #ball {
     position: relative;
     width: var(--ball);
@@ -32,9 +54,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    /* 默认 = st-idle 灰蓝 */
-    background: linear-gradient(160deg, #9aa3b2 0%, #6e7889 100%);
-    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    background: linear-gradient(160deg, var(--ldn-ink-2) 0%, var(--ldn-ink) 100%);
+    box-shadow: var(--ldn-shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.20);
     transition: filter 0.15s ease, transform 0.08s ease;
     -webkit-user-select: none;
     user-select: none;
@@ -46,35 +67,44 @@
   #ball:active {
     transform: scale(0.94);
   }
-  /* st-playing：品牌色 + 轻微呼吸（光环脉冲，不占用 transform 以免影响按压反馈） */
+  /* st-playing：主色（紫）——与主界面 primary.main 完全同值，配呼吸光环 */
   #ball.st-playing {
-    background: linear-gradient(160deg, #8f83ff 0%, #6b5bff 100%);
+    background: linear-gradient(160deg, var(--ldn-primary-soft) 0%, var(--ldn-primary) 100%);
     animation: breathe 1.6s ease-in-out infinite;
   }
-  /* st-buffering：橙色 */
+  /* st-buffering：警告色（琥珀）——深色图标保证 ≥ 4.5:1 */
   #ball.st-buffering {
-    background: linear-gradient(160deg, #ffb35c 0%, #f28c28 100%);
+    background: linear-gradient(160deg, var(--ldn-warning-soft) 0%, var(--ldn-warning) 100%);
   }
-  /* st-conflict：红色 + 角标（hotkeyOk===false 时优先于播放状态） */
+  /* st-conflict：错误色（红）+ 角标；hotkeyOk===false 时优先于播放状态 */
   #ball.st-conflict {
-    background: linear-gradient(160deg, #f26d74 0%, #d9344a 100%);
+    background: linear-gradient(160deg, var(--ldn-error-soft) 0%, var(--ldn-error) 100%);
   }
   @keyframes breathe {
     0%, 100% {
-      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), 0 0 0 0 rgba(107, 91, 255, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      box-shadow: var(--ldn-shadow-1), 0 0 0 0 rgba(107, 91, 255, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.24);
     }
     50% {
-      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), 0 0 0 7px rgba(107, 91, 255, 0),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      box-shadow: var(--ldn-shadow-1), 0 0 0 7px rgba(107, 91, 255, 0),
+        inset 0 1px 0 rgba(255, 255, 255, 0.24);
     }
   }
   #ball svg {
     width: calc(var(--ball) * 0.42);
     height: calc(var(--ball) * 0.42);
+    color: #ffffff;
     fill: #ffffff;
-    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+    filter: drop-shadow(0 1px 1px rgba(16, 24, 40, 0.28));
     pointer-events: none;
+  }
+  /* 原本写死的白色描边改成 currentColor：缓冲态换成深色图标时不用改结构 */
+  #ball svg path[stroke] {
+    stroke: currentColor;
+  }
+  #ball.st-buffering svg {
+    color: var(--ldn-ink);
+    fill: var(--ldn-ink);
   }
   .icon-pause {
     display: none;
@@ -87,26 +117,28 @@
   }
   #badge {
     position: absolute;
-    top: calc(var(--ball) * -0.035);
-    right: calc(var(--ball) * -0.035);
+    /* 窗口尺寸 == 球直径，负偏移的角标会被窗口裁掉半边（112px 档位实测缺 4px）。
+       收到 0.01*ball 仍在球体右上缘，但整枚角标都能画出来。 */
+    top: calc(var(--ball) * 0.01);
+    right: calc(var(--ball) * 0.01);
     width: calc(var(--ball) * 0.30);
     height: calc(var(--ball) * 0.30);
     border-radius: 50%;
-    background: #d9344a;
-    color: #ffffff;
+    background: var(--ldn-error);
+    color: var(--ldn-paper);
     font-size: calc(var(--ball) * 0.21);
     font-weight: 700;
     line-height: calc(var(--ball) * 0.27);
     text-align: center;
-    border: calc(var(--ball) * 0.027) solid #ffffff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    border: calc(var(--ball) * 0.027) solid var(--ldn-paper);
+    box-shadow: var(--ldn-shadow-1);
     display: none;
     pointer-events: none;
   }
   #ball.st-conflict #badge {
     display: block;
   }
-  /* 右键自绘菜单：深色小圆角面板，风格与球体协调。
+  /* 右键自绘菜单：白底卡片 + 1px 分隔线 + 双层阴影，与主界面卡片（paper + divider + 18px 圆角）同语言。
      position:fixed 使其不受 body overflow:hidden 裁剪；
      但球窗口本身只有球体大小，菜单超出部分仍会被窗口裁切——
      由主进程在收到 menu 提示时临时放大球窗口（见 floatBall.js handleMenu）。 */
@@ -116,10 +148,11 @@
     min-width: calc(var(--ball) * 3.2);
     padding: calc(var(--ball) * 0.07);
     border-radius: calc(var(--ball) * 0.18);
-    background: rgba(30, 35, 46, 0.97);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    background: var(--ldn-paper);
+    color: var(--ldn-ink);
+    border: 1px solid var(--ldn-divider);
+    box-shadow: var(--ldn-shadow-2);
     font-size: calc(var(--ball) * 0.22);
-    color: #e8ebf2;
     -webkit-user-select: none;
     user-select: none;
   }
@@ -135,15 +168,23 @@
     text-align: left;
     cursor: pointer;
     white-space: nowrap;
-    min-height: calc(var(--ball) * 0.62);
+    /* 目标尺寸：小档位（56px）保底 44px（WCAG 2.5.5），大档位仍随球体放大。
+       上限必须收敛：主进程把菜单窗口高度钳在 600px（floatBall.js handleMenu），
+       8 项在 112px 档位下必须放得下——0.60*ball 实测菜单高 573px，留出余量；
+       0.62 会到 606px，最下面「隐藏悬浮球」被裁掉 6px。 */
+    min-height: max(calc(var(--ball) * 0.60), 44px);
   }
   #ctx-menu .ctx-item:hover {
-    background: rgba(143, 131, 255, 0.38);
+    background: var(--ldn-hover);
+  }
+  #ctx-menu .ctx-item:focus-visible {
+    outline: 3px solid var(--ldn-focus);
+    outline-offset: -3px;
   }
   #ctx-menu hr {
     margin: calc(var(--ball) * 0.07) calc(var(--ball) * 0.1);
     border: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 1px solid var(--ldn-divider);
   }
 </style>
 </head>

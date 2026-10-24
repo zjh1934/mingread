@@ -1,0 +1,37 @@
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+--- 1.0x ---
+scroll: {"top":668,"height":48}
+captured qa-wui2-shortcut-1x-collapsed.png 1164x735 70198B
+collapsed: {"ariaExpanded":"false","ariaControls":"shortcut-guide-panel","ariaLabel":"展开快捷键速查，共 6 条","panel":"absent","rowCount":0,"firstHotkey":"none","rowLabels":[],"clipboardNote":"","fontPx":"n/a","cardHeight":48,"cardWidth":880,"radius":"42px","borderColor":"rgba(16, 24, 40, 0.14)","bg":"rgb(255, 255, 255)","overflowCells":[],"docOverflowX":0,"cardOverflowX":0,"panelOverflowX":0,"window":"1164x735"}
+click expand: true
+captured qa-wui2-shortcut-1x-expanded.png 1164x735 59146B
+expanded: {"ariaExpanded":"true","ariaControls":"shortcut-guide-panel","ariaLabel":"收起快捷键速查","panel":"present","rowCount":6,"firstHotkey":"F1","rowLabels":["朗读选中文字","放大一档","缩小一档","退出放大","倍率快速循环","复制即读"],"clipboardNote":"已开启：复制文字后自动朗读。可在 设置 → 系统 里关闭。","fontPx":"14px","cardHeight":462,"cardWidth":880,"radius":"42px","borderColor":"rgba(16, 24, 40, 0.14)","bg":"rgb(255, 255, 255)","overflowCells":[],"docOverflowX":0,"cardOverflowX":0,"panelOverflowX":0,"window":"1164x735"}
+a11y after expand: [{"kind":"cue","type":"press"},{"kind":"announce","text":"快捷键速查已展开，共 6 条","priority":"normal"}]
+collapsed-height(expanded): 462
+after collapse: {"ariaExpanded":"false","table":false,"height":48}
+a11y after collapse: [{"kind":"cue","type":"press"},{"kind":"announce","text":"快捷键速查已收起","priority":"normal"}]
+--- 2.0x ---
+scroll: {"top":602,"height":93}
+captured qa-wui2-shortcut-2x-collapsed.png 1164x735 67672B
+collapsed: {"ariaExpanded":"false","ariaControls":"shortcut-guide-panel","ariaLabel":"展开快捷键速查，共 6 条","panel":"absent","rowCount":0,"firstHotkey":"none","rowLabels":[],"clipboardNote":"","fontPx":"n/a","cardHeight":93,"cardWidth":880,"radius":"42px","borderColor":"rgba(16, 24, 40, 0.14)","bg":"rgb(255, 255, 255)","overflowCells":[],"docOverflowX":0,"cardOverflowX":0,"panelOverflowX":0,"window":"1164x735"}
+captured qa-wui2-shortcut-2x-expanded.png 1164x735 81697B
+expanded: {"ariaExpanded":"true","ariaControls":"shortcut-guide-panel","ariaLabel":"收起快捷键速查","panel":"present","rowCount":6,"firstHotkey":"F1","rowLabels":["朗读选中文字","放大一档","缩小一档","退出放大","倍率快速循环","复制即读"],"clipboardNote":"已开启：复制文字后自动朗读。可在 设置 → 系统 里关闭。","fontPx":"28px","cardHeight":998,"cardWidth":880,"radius":"42px","borderColor":"rgba(16, 24, 40, 0.14)","bg":"rgb(255, 255, 255)","overflowCells":[],"docOverflowX":0,"cardOverflowX":0,"panelOverflowX":0,"window":"1164x735"}
+scroll-bottom: ok
+captured qa-wui2-shortcut-2x-expanded-bottom.png 1164x735 88235B
+--- store-driven hotkey ---
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+store-driven: {"hotkeyShown":"Ctrl+Alt+R","clipboardNote":"复制即读已关闭：可在 设置 → 系统 里打开。"}

@@ -1,0 +1,32 @@
+settings.json=C:\Users\Administrator\AppData\Local\Temp\ldnwui1-DUUsfA\settings.json fontScale=2
+before require, hasLock=true
+after require, isReady=false
+app ready fired
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+open settings: true
+measure[2x]: {"scale":"2","htmlFont":"32px","dialogW":900,"dialogH":676,"contentScrollW":907,"contentClientW":880,"overflowX":27,"docScrollW":1154,"docClientW":1154,"tabs":["常用","朗读","缩放","无障碍","关于"],"tabHeights":[88,88,88,88,88],"selectedTab":"常用","panelRole":"DIV","smallTargets":[],"chain":["INPUT w=252 right=1034 pad=0px/0px minW=0px flex=0 1 auto","SPAN w=84 right=950 pad=18px/18px minW=0px flex=0 1 auto","SPAN w=124 right=950 pad=0px/0px minW=auto flex=0 0 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=auto flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","content right=1017 pad=24px/24px"],"overflowing":["INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017"]}
+captured settings-2x.png 1164x735 tab=常用
+switch to 无障碍: true
+measure[2x-a11y]: {"scale":"2","htmlFont":"32px","dialogW":900,"dialogH":676,"contentScrollW":907,"contentClientW":880,"overflowX":27,"docScrollW":1154,"docClientW":1154,"tabs":["常用","朗读","缩放","无障碍","关于"],"tabHeights":[88,88,88,88,88],"selectedTab":"无障碍","panelRole":"DIV","smallTargets":[],"chain":["INPUT w=252 right=1034 pad=0px/0px minW=0px flex=0 1 auto","SPAN w=84 right=950 pad=18px/18px minW=0px flex=0 1 auto","SPAN w=124 right=950 pad=0px/0px minW=auto flex=0 0 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=auto flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","content right=1017 pad=24px/24px"],"overflowing":["INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017"]}
+captured settings-2x-a11y.png 1164x735 tab=无障碍
+switch to 缩放: true
+measure[2x-zoom]: {"scale":"2","htmlFont":"32px","dialogW":900,"dialogH":676,"contentScrollW":907,"contentClientW":880,"overflowX":27,"docScrollW":1154,"docClientW":1154,"tabs":["常用","朗读","缩放","无障碍","关于"],"tabHeights":[88,88,88,88,88],"selectedTab":"缩放","panelRole":"DIV","smallTargets":[],"chain":["INPUT w=252 right=1034 pad=0px/0px minW=0px flex=0 1 auto","SPAN w=84 right=950 pad=18px/18px minW=0px flex=0 1 auto","SPAN w=124 right=950 pad=0px/0px minW=auto flex=0 0 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=auto flex=0 1 auto","DIV w=766 right=950 pad=0px/0px minW=0px flex=0 1 auto","content right=1017 pad=24px/24px"],"overflowing":["INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017","INPUT.PrivateSwitchBase-input MuiSwitch-input  right=1034 vs 1017"]}
+captured settings-2x-zoom.png 1164x735 tab=缩放
+dialogPresentBeforeEsc=true closedAfterEsc=true
+reopen=true arrowFrom=缩放 arrowResult={"selected":"无障碍","focused":"无障碍"}

@@ -1,0 +1,31 @@
+settings.json=C:\Users\Administrator\AppData\Local\Temp\ldnwui1-cSCffI\settings.json fontScale=1
+before require, hasLock=true
+after require, isReady=false
+app ready fired
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+open settings: true
+measure[1x]: {"scale":"1","htmlFont":"16px","dialogW":900,"dialogH":676,"contentScrollW":891,"contentClientW":890,"overflowX":1,"docScrollW":1164,"docClientW":1164,"tabs":["常用","朗读","缩放","无障碍","关于"],"tabHeights":[44,44,44,44,44],"selectedTab":"常用","panelRole":"DIV","smallTargets":[],"chain":[],"overflowing":[]}
+captured settings-1x.png 1164x735 tab=常用
+captured settings-1x-read.png 1164x735 tab=朗读 clicked=true
+captured settings-1x-zoom.png 1164x735 tab=缩放 clicked=true
+captured settings-1x-a11y.png 1164x735 tab=无障碍 clicked=true
+captured settings-1x-about.png 1164x735 tab=关于 clicked=true
+back to 常用: true
+dialogPresentBeforeEsc=true closedAfterEsc=true
+reopen=true arrowFrom=常用 arrowResult={"selected":"朗读","focused":"朗读"}

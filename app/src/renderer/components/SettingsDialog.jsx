@@ -6,173 +6,79 @@ import {
   DialogActions,
   Button,
   Stack,
-  Switch,
-  TextField,
   Typography,
-  Divider,
-  ToggleButtonGroup,
-  ToggleButton,
   Box,
   IconButton,
-  Chip,
-  Tabs,
-  Tab,
 } from '@mui/material';
-import { LightMode, DarkMode, Contrast, Close, Keyboard, ContentPaste, TouchApp, MyLocation, DeleteSweep } from '@mui/icons-material';
+import { Close, Bolt, MenuBook, ZoomIn, AccessibilityNew, Info, ContentPaste } from '@mui/icons-material';
 import { useSettings } from '../store/settingsStore';
-import TuningPanel from './TuningPanel';
 import ZoomSettings from './ZoomSettings';
 import announcer from '../services/announcer';
 import statusHistory from '../services/statusHistory';
-import { fs, su, THEME_MODES, THEME_MODE_LABELS } from '../theme'; // α：px → rem/calc，随字号档位缩放
+import { fs, su, THEME_MODE_LABELS } from '../theme'; // α：px → rem/calc，随字号档位缩放
+import SectionTabs from './settings/SectionTabs';
+import HotkeySettings from './settings/HotkeySettings';
+import VoiceSettings from './settings/VoiceSettings';
+import ReadingSettings from './settings/ReadingSettings';
+import A11ySettings from './settings/A11ySettings';
+import AboutSection from './settings/AboutSection';
+import { SettingGroup, SwitchRow, HelpText } from './settings/rows';
+import { hydrateAnnouncePref } from './settings/announcePref';
 
-const HOTKEY_CHIPS = ['F1', 'Ctrl+Alt+R', 'Ctrl+Alt+F1', 'Shift+F1'];
-const TABS = [
-  { key: 'read', label: '朗读' },
-  { key: 'hotkey', label: '热键' },
-  { key: 'zoom', label: '缩放' },
-  { key: 'look', label: '外观' },
-  { key: 'log', label: '记录' },
+// 启动即补水「语音播报」开关（模块初始化时执行一次，不依赖对话框是否打开）
+hydrateAnnouncePref();
+
+/**
+ * 设置面板分区（v2.4.0 W-UI1 IA 重构）。
+ * 归类原则：按「多久用一次 + 出问题时先找谁」排，而不是按实现模块排。
+ *   常用：改一次影响全局、且出事就没法用的（热键 / 复制即读 / 音色）
+ *   朗读：日常调音（语速语调音量）+ 睡前场景（定时关闭）
+ *   缩放：LensZoom 全部参数
+ *   无障碍：看不清时的总开关（字号 / 对比度 / 语音提示 / 悬浮球）
+ *   关于：版本、引擎摘要、排障记录
+ */
+const SECTIONS = [
+  { key: 'common', label: '常用', icon: <Bolt sx={{ fontSize: fs(20) }} /> },
+  { key: 'read', label: '朗读', icon: <MenuBook sx={{ fontSize: fs(20) }} /> },
+  { key: 'zoom', label: '缩放', icon: <ZoomIn sx={{ fontSize: fs(20) }} /> },
+  { key: 'a11y', label: '无障碍', icon: <AccessibilityNew sx={{ fontSize: fs(20) }} /> },
+  { key: 'about', label: '关于', icon: <Info sx={{ fontSize: fs(20) }} /> },
 ];
 
-const SEVERITY_LABELS = { error: '错误', warning: '警告', success: '成功', info: '提示' };
-const SEVERITY_COLORS = { error: 'error', warning: 'warning', success: 'success', info: 'info' };
-const THEME_ICONS = { light: <LightMode sx={{ fontSize: fs(18), mr: 0.75 }} />, dark: <DarkMode sx={{ fontSize: fs(18), mr: 0.75 }} />, hc: <Contrast sx={{ fontSize: fs(18), mr: 0.75 }} /> };
+const sectionLabel = (key) => (SECTIONS.find((s) => s.key === key) || SECTIONS[0]).label;
 
-function SectionTitle({ children }) {
-  return (
-    <Typography variant="subtitle2" sx={{ color: 'text.secondary', letterSpacing: 0.4, fontSize: fs(12.5) }}>
-      {children}
-    </Typography>
-  );
-}
-
-function Row({ icon, title, desc, control }) {
-  return (
-    <Box>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {icon}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="body2">{title}</Typography>
-          {desc ? (
-            <Typography variant="caption" color="text.secondary">
-              {desc}
-            </Typography>
-          ) : null}
-        </Box>
-        {control}
-      </Stack>
-    </Box>
-  );
-}
-
-/** 错误/状态历史面板（基线 P2）：Snackbar 会消失，这里留痕可回看，可清空 */
-function HistoryPanel() {
-  const [items, setItems] = useState(() => statusHistory.getAll());
-  const [confirming, setConfirming] = useState(false);
-
-  useEffect(() => statusHistory.subscribe(setItems), []);
-
-  const handleClear = () => {
-    statusHistory.clear();
-    setConfirming(false);
-  };
-
-  return (
-    <Stack spacing={1.25}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-        <Typography variant="body2" sx={{ flex: 1, fontWeight: 600 }}>
-          错误与状态记录
-        </Typography>
-        {items.length > 0 &&
-          (confirming ? (
-            <Stack direction="row" spacing={0.5}>
-              <Button size="small" color="error" variant="contained" onClick={handleClear}>
-                确认清空
-              </Button>
-              <Button size="small" onClick={() => setConfirming(false)}>
-                取消
-              </Button>
-            </Stack>
-          ) : (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<DeleteSweep sx={{ fontSize: fs(16) }} />}
-              onClick={() => setConfirming(true)}
-            >
-              清空记录
-            </Button>
-          ))}
-      </Stack>
-      <Typography variant="caption" color="text.secondary">
-        提示条几秒后会消失，这里保留最近 {statusHistory.STATUS_HISTORY_MAX} 条记录（含全局异常与热键冲突），重启也不会丢。
-      </Typography>
-      {items.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          暂无记录
-        </Typography>
-      ) : (
-        <Stack spacing={1} sx={{ maxHeight: su(360), overflowY: 'auto', pr: 0.5 }}>
-          {items.map((it) => (
-            <Box
-              key={it.id}
-              sx={{
-                p: 1.25,
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor: it.severity === 'error' ? 'error.main' : 'divider',
-                bgcolor: 'background.paper',
-              }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  size="small"
-                  label={SEVERITY_LABELS[it.severity] || '提示'}
-                  color={SEVERITY_COLORS[it.severity] || 'info'}
-                  variant={it.severity === 'error' ? 'filled' : 'outlined'}
-                  sx={{ flexShrink: 0 }}
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                  {statusHistory.formatTime(it.time)}
-                </Typography>
-                {it.source ? (
-                  <Typography variant="caption" color="text.secondary">
-                    · {it.source}
-                  </Typography>
-                ) : null}
-              </Stack>
-              <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-word' }}>
-                {it.message}
-              </Typography>
-            </Box>
-          ))}
-        </Stack>
-      )}
-    </Stack>
-  );
-}
-
-export default function SettingsDialog({ open, onClose, status, notify }) {
+export default function SettingsDialog({ open, onClose, status, notify, playback }) {
   const themeMode = useSettings((s) => s.themeMode);
   const hotkey = useSettings((s) => s.hotkey);
   const hotkeyOk = useSettings((s) => s.hotkeyOk);
   const clipboardAuto = useSettings((s) => s.clipboardAuto);
-  const floatBallEnabled = useSettings((s) => s.floatBallEnabled);
   const rate = useSettings((s) => s.rate);
   const pitch = useSettings((s) => s.pitch);
   const volume = useSettings((s) => s.volume);
   const set = useSettings((s) => s.set);
   const savePrefs = useSettings((s) => s.savePrefs);
 
-  const [tab, setTab] = useState(0);
+  const [section, setSection] = useState('common');
   const [hotkeyDraft, setHotkeyDraft] = useState(hotkey);
   const prefTimerRef = useRef(null);
+  const openedRef = useRef(false);
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
 
   useEffect(() => {
-    if (!open) return;
-    setHotkeyDraft(hotkey);
+    if (open) setHotkeyDraft(hotkey);
   }, [open, hotkey]);
+
+  useEffect(() => {
+    if (!open) {
+      openedRef.current = false;
+      return;
+    }
+    if (openedRef.current) return;
+    openedRef.current = true;
+    // 打开即播报「在哪个分区」，读屏/看不清的用户不用先扫一遍才知道身在何处
+    announcer.say('settingsOpened', `设置已打开，当前是${sectionLabel(sectionRef.current)}分区`);
+  }, [open]);
 
   useEffect(
     () => () => {
@@ -180,8 +86,6 @@ export default function SettingsDialog({ open, onClose, status, notify }) {
     },
     []
   );
-
-  const appInfo = (status && status.app) || {};
 
   // 系统设置统一经主进程保存；主进程保存后会广播新设置，store 自动同步
   const saveSystemSettings = async (patch) => {
@@ -198,6 +102,14 @@ export default function SettingsDialog({ open, onClose, status, notify }) {
     },
     [notify]
   );
+
+  /** 分区切换：视觉（选中态）+ 语音（分区名）双通道，且保持焦点在 Tab 上 */
+  const handleSectionChange = useCallback((key) => {
+    if (sectionRef.current === key) return;
+    sectionRef.current = key;
+    setSection(key);
+    announcer.say('settingsSection', `设置：${sectionLabel(key)}分区`);
+  }, []);
 
   /** 统一的即时生效模型：改了就存，存完给一次「已保存」的视觉 + 语音确认 */
   const toggleSystemFlag = async (key, value, label) => {
@@ -264,168 +176,101 @@ export default function SettingsDialog({ open, onClose, status, notify }) {
     }, 1200);
   };
 
-  const handleResetBallPos = async () => {
-    try {
-      const res = await saveSystemSettings({ floatBallPos: null });
-      if (res && res.ok === false) throw new Error(res.error || '重置失败');
-      pushLog('悬浮球位置已重置', 'success', { duration: 2200 });
-    } catch (e) {
-      pushLog(`重置悬浮球位置失败：${e?.message || e}`, 'error', { priority: 'high' });
-    }
-  };
-
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ pb: 0 }}>
-        <Stack direction="row" alignItems="center">
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" component="div">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="md"
+      aria-labelledby="settings-dialog-title"
+      PaperProps={{ sx: { maxHeight: '92vh' } }}
+    >
+      <DialogTitle id="settings-dialog-title" sx={{ pb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h5" component="div">
               设置
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              朗读女 Neo {appInfo.version ? `v${appInfo.version}` : ''} · 改动即时生效
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+              按分区查找 · 改动即时生效
             </Typography>
           </Box>
-          <IconButton size="small" onClick={onClose} aria-label="关闭">
-            <Close fontSize="small" />
+          <IconButton onClick={onClose} aria-label="关闭设置">
+            <Close sx={{ fontSize: fs(22) }} />
           </IconButton>
         </Stack>
       </DialogTitle>
 
-      <Tabs
-        value={tab}
-        onChange={(_, v) => setTab(v)}
-        variant="fullWidth"
-        sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
+      <SectionTabs sections={SECTIONS} value={section} onChange={handleSectionChange} />
+
+      <DialogContent
+        dividers
+        sx={{ minHeight: su(320), overflowX: 'hidden' }}
+        id={`settings-panel-${section}`}
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${section}`}
+        tabIndex={0}
       >
-        {TABS.map((t) => (
-          <Tab key={t.key} label={t.label} />
-        ))}
-      </Tabs>
-
-      <DialogContent dividers sx={{ minHeight: 320 }}>
-        {TABS[tab].key === 'read' && (
-          <Stack spacing={1.5}>
-            <TuningPanel rate={rate} pitch={pitch} volume={volume} onChange={applyTuning} />
-            <Divider />
-            <Row
-              icon={<ContentPaste sx={{ fontSize: fs(16), color: 'text.secondary' }} />}
-              title="复制文本后自动朗读"
-              desc="开启后：在任何程序复制文字会自动朗读；默认关闭"
-              control={
-                <Switch
-                  checked={clipboardAuto}
-                  onChange={(e) => toggleSystemFlag('clipboardAuto', e.target.checked, '复制即读')}
-                />
-              }
-            />
-          </Stack>
-        )}
-
-        {TABS[tab].key === 'hotkey' && (
-          <Stack spacing={1} sx={{ mt: 0.5 }}>
-            <SectionTitle>划词朗读热键</SectionTitle>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-              <TextField
-                size="small"
-                label="热键"
-                value={hotkeyDraft}
-                onChange={(e) => setHotkeyDraft(e.target.value)}
-                onBlur={() => applyHotkey(hotkeyDraft)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') applyHotkey(hotkeyDraft);
-                }}
-                InputProps={{
-                  startAdornment: <Keyboard sx={{ fontSize: fs(18), mr: 1, color: 'text.secondary' }} />,
-                }}
-                sx={{ width: su(220) }}
+        <Stack spacing={1.75} sx={{ pt: 0.5 }}>
+          {section === 'common' && (
+            <>
+              <HotkeySettings
+                hotkey={hotkey}
+                hotkeyOk={hotkeyOk}
+                hotkeyDraft={hotkeyDraft}
+                setHotkeyDraft={setHotkeyDraft}
+                onApply={applyHotkey}
               />
-              {hotkeyOk === true && (
-                <Chip size="small" color="success" variant="outlined" label="✅ 已生效" />
-              )}
-              {hotkeyOk === false && (
-                <Chip size="small" color="error" variant="outlined" label="⚠️ 注册失败（被占用）" />
-              )}
-            </Stack>
-            <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }} alignItems="center">
-              <Typography variant="caption" color="text.secondary">
-                快捷：
-              </Typography>
-              {HOTKEY_CHIPS.map((k) => (
-                <Chip
-                  key={k}
-                  size="small"
-                  label={k}
-                  onClick={() => applyHotkey(k)}
-                  color={hotkey === k ? 'primary' : 'default'}
-                  variant={hotkey === k ? 'filled' : 'outlined'}
+
+              <SettingGroup title="快速朗读" desc="不选中文字也能读：复制或按热键读剪贴板">
+                <SwitchRow
+                  id="clipboard-auto"
+                  label="复制文本后自动朗读"
+                  desc="开启后：在任何程序复制文字会自动朗读；默认开启，适合经常要读屏幕文字的场景"
+                  checked={clipboardAuto}
+                  onChange={(e) => toggleSystemFlag('clipboardAuto', e, '复制即读')}
                 />
-              ))}
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              在任意程序选中文字后按该热键即开始朗读；改动立即生效，无需保存。
-            </Typography>
-          </Stack>
-        )}
+                <HelpText>
+                  关掉后仍可从托盘菜单「朗读剪贴板」主动朗读剪贴板内容，不会误读你随手复制的东西。
+                </HelpText>
+              </SettingGroup>
 
-        {TABS[tab].key === 'zoom' && <ZoomSettings notify={pushLog} />}
+              <VoiceSettings notify={pushLog} />
+            </>
+          )}
 
-        {TABS[tab].key === 'look' && (
-          <Stack spacing={1.75} sx={{ mt: 0.5 }}>
-            <Box>
-              <SectionTitle>主题</SectionTitle>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
-                <ToggleButtonGroup
-                  exclusive
-                  size="medium"
-                  value={themeMode}
-                  onChange={(_, v) => applyTheme(v)}
-                  sx={{ flexWrap: 'wrap' }}
-                >
-                  {THEME_MODES.map((m) => (
-                    <ToggleButton key={m} value={m} sx={{ px: 2.5, py: 1 }}>
-                      {THEME_ICONS[m] || null}
-                      {THEME_MODE_LABELS[m] || m}
-                    </ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              </Stack>
-            </Box>
-
-            <Divider />
-
-            <Row
-              icon={<TouchApp sx={{ fontSize: fs(16), color: 'text.secondary' }} />}
-              title="启用桌面悬浮球"
-              desc="单击朗读当前选中文字，可拖动位置"
-              control={
-                <Switch
-                  checked={floatBallEnabled}
-                  onChange={(e) => toggleSystemFlag('floatBallEnabled', e.target.checked, '桌面悬浮球')}
-                />
-              }
+          {section === 'read' && (
+            <ReadingSettings
+              rate={rate}
+              pitch={pitch}
+              volume={volume}
+              onTuningChange={applyTuning}
+              playback={playback}
             />
-            <Box>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<MyLocation sx={{ fontSize: fs(16) }} />}
-                onClick={handleResetBallPos}
-              >
-                重置位置
-              </Button>
-            </Box>
-          </Stack>
-        )}
+          )}
 
-        {TABS[tab].key === 'log' && <HistoryPanel />}
+          {section === 'zoom' && (
+            <SettingGroup
+              title="屏幕缩放（复刻 macOS 缩放）"
+              desc="滚轮或热键放大屏幕局部；放大后按 Ctrl+Alt+方向键可平移画面"
+            >
+              <ZoomSettings notify={pushLog} />
+            </SettingGroup>
+          )}
+
+          {section === 'a11y' && (
+            <A11ySettings notify={pushLog} onThemeChange={applyTheme} onToggleFlag={toggleSystemFlag} />
+          )}
+
+          {section === 'about' && <AboutSection status={status} />}
+        </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
-        <Typography variant="caption" color="text.secondary">
-          所有改动即时生效并自动保存
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: su(180) }}>
+          改动即时生效并自动保存 · 按 Esc 关闭
         </Typography>
-        <Button variant="contained" onClick={onClose}>
+        <Button variant="contained" onClick={onClose} sx={{ minHeight: su(44) }}>
           完成
         </Button>
       </DialogActions>

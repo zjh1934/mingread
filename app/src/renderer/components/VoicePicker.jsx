@@ -23,64 +23,103 @@ function subtitleOf(voice) {
 
 function VoiceRow({ voice, selected, previewing, onChange, onPreview }) {
   const disabled = voice.available === false;
+  const subtitle = subtitleOf(voice);
 
   return (
     <Box
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      aria-disabled={disabled || undefined}
-      data-selected={selected ? 'true' : 'false'}
-      onClick={() => !disabled && onChange(voice.id)}
-      onKeyDown={(e) => {
-        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          onChange(voice.id);
-        }
-      }}
       sx={{
         display: 'flex',
         alignItems: 'center',
         gap: 1,
-        px: 1.25,
-        py: 1,
+        pl: 1.25,
+        pr: 1,
+        py: 0.75,
         minHeight: su(64),
         borderRadius: 2,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
         border: '1px solid',
         borderColor: selected ? 'primary.main' : 'divider',
         bgcolor: selected ? 'action.selected' : 'transparent',
+        opacity: disabled ? 0.6 : 1,
         transition: 'background-color .15s, border-color .15s',
-        '&:hover': { bgcolor: selected ? 'action.selected' : 'action.hover' },
-        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
       }}
     >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+      {/* 选择区：整块可点（≥44px 高），且不与「试听」按钮嵌套，避免两个可交互元素互相吞事件 */}
+      <Box
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-pressed={selected}
+        aria-disabled={disabled || undefined}
+        aria-label={`选择音色 ${voice.displayName}，${subtitle}${disabled ? '，需要联网' : ''}${
+          selected ? '，当前已选中' : ''
+        }`}
+        data-selected={selected ? 'true' : 'false'}
+        onClick={() => !disabled && onChange(voice.id)}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            onChange(voice.id);
+          }
+        }}
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          alignSelf: 'stretch',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          minHeight: su(44),
+          py: 0.5,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          borderRadius: 1.5,
+          '&:focus-visible': { outline: 'var(--ldn-focus-width) solid var(--ldn-focus-color)', outlineOffset: 2 },
+        }}
+      >
+        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.25 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {voice.displayName}
           </Typography>
-          {selected && <CheckCircle sx={{ fontSize: fs(15), color: 'primary.main' }} />}
+          {selected && (
+            <>
+              <CheckCircle sx={{ fontSize: fs(18), color: 'primary.main' }} />
+              <Box
+                component="span"
+                sx={{
+                  px: 0.75,
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'primary.main',
+                  color: 'primary.main',
+                  fontSize: fs(12.5),
+                  fontWeight: 700,
+                  lineHeight: 1.6,
+                }}
+              >
+                已选
+              </Box>
+            </>
+          )}
         </Stack>
         {/* 低视力「看不全」：音色描述允许换行，禁止省略号截断 */}
         <Typography variant="body2" color="text.secondary" sx={{ display: 'block', wordBreak: 'break-word' }}>
-          {subtitleOf(voice)}
+          {subtitle}
           {disabled ? ' · 需要联网' : ''}
         </Typography>
       </Box>
 
-      <Tooltip title={disabled ? '需要网络连接' : '试听'}>
+      <Tooltip title={disabled ? '需要网络连接' : `试听 ${voice.displayName}（不会改变当前选择）`}>
         <span>
           <Button
             size="small"
             color={selected ? 'primary' : 'inherit'}
+            variant={selected ? 'outlined' : 'text'}
             disabled={disabled || previewing}
             onClick={(e) => {
               e.stopPropagation();
               onPreview(voice);
             }}
-            sx={{ minWidth: su(64), height: su(44), fontSize: fs(13.5) }}
-            startIcon={previewing ? <CircularProgress size={12} /> : null}
+            aria-label={`试听音色 ${voice.displayName}`}
+            sx={{ minWidth: su(64), minHeight: su(44), fontSize: fs(14), flexShrink: 0 }}
+            startIcon={previewing ? <CircularProgress size={su(14)} /> : null}
           >
             试听
           </Button>
@@ -91,27 +130,33 @@ function VoiceRow({ voice, selected, previewing, onChange, onPreview }) {
 }
 
 /**
- * 音色选择（次级）：从右侧整栏降为次级入口的弹层内容。
+ * 音色选择（次级）：既是主界面气泡内容，也内嵌在设置的「常用」分区。
  * 「配一次就不再动」的选择不该占据顶层位置；当前音色由触发按钮展示。
+ * @param {boolean} inline 内嵌模式：去掉固定宽度与标题（外层已经有分区标题）
  */
-export default function VoicePicker({ status, value, onChange, onPreview, previewingId }) {
+export default function VoicePicker({ status, value, onChange, onPreview, previewingId, inline }) {
   const voices = (status.voices && status.voices.length ? status.voices : FALLBACK_VOICES).slice(0, 2);
 
   return (
     <Box
       sx={{
-        width: su(320),
-        p: 1.5,
+        width: inline ? '100%' : su(320),
+        maxWidth: '100%',
+        p: inline ? 0 : 1.5,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
-        <RecordVoiceOver sx={{ fontSize: fs(18), color: 'primary.main' }} />
-        <Typography variant="subtitle2">音色</Typography>
-      </Stack>
+      {!inline && (
+        <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
+          <RecordVoiceOver sx={{ fontSize: fs(20), color: 'primary.main' }} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            音色
+          </Typography>
+        </Stack>
+      )}
 
-      <Stack spacing={1}>
+      <Stack spacing={1} role="group" aria-label="音色选择">
         {voices.map((v) => (
           <VoiceRow
             key={v.id}
@@ -124,7 +169,7 @@ export default function VoicePicker({ status, value, onChange, onPreview, previe
         ))}
       </Stack>
 
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1.25 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>
         点击选用，试听不改变当前选择
       </Typography>
     </Box>
