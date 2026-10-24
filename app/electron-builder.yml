@@ -20,7 +20,11 @@ files:
   - src/main/**/*
   - src/preload/**/*
   - src/shared/**/*
-  - resources/**/*
+  # 只收图标；resources/magnification 走文件末尾的 extraResources。
+  # 若写成 resources/**/*，微软 DLL 会同时进 asar 和 resources/ 两份（体积重复，
+  # 且 locateDll 实际只用 process.resourcesPath 那份，asar 内副本永远不生效）。
+  - resources/icon.png
+  - resources/icon.ico
   - package.json
   - LICENSE
   - README.md
