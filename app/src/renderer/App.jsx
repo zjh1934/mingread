@@ -4,6 +4,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import TimerIcon from '@mui/icons-material/Timer';
 import TuneIcon from '@mui/icons-material/Tune';
 import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
+// v2.4.0 IA：无播放态下的「朗读下方文本」入口图标
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 import { useSettings } from './store/settingsStore';
 import { useStreamingPlayback } from './hooks/useStreamingPlayback';
@@ -21,6 +23,8 @@ import SettingsDialog from './components/SettingsDialog';
 // v2.4.0：离线语音（NVSA 本地引擎）一键部署引导。未就绪时在内容区顶部显示一张卡片，
 // 装好后组件自身返回 null，不占首屏、不干扰朗读。
 import VoiceDeployGate from './components/VoiceDeployGate';
+// v2.4.0 IA 重构：首屏状态卡（把「选中→按 F1」这条主用法放到第一眼位置）
+import HeroStatus from './components/HeroStatus';
 
 const SAMPLE_TEXT =
   '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
@@ -48,6 +52,9 @@ export default function App() {
   const [snack, setSnack] = useState(null);
   const [zoomState, setZoomState] = useState(null); // 屏幕缩放运行时状态 {active, zoom, paused, trigger}
   const [previewingId, setPreviewingId] = useState(null);
+  // v2.4.0 IA：播放器默认收起。首屏先回答「这个窗口怎么用」，用户真的要读文本时才展开播放器。
+  // 否则默认的 131 字示例文本会让播放器永远占满首屏，把主用法（选中→F1）挤到角落。
+  const [playerOpened, setPlayerOpened] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectionChars, setSelectionChars] = useState(0);
   // 主界面信息架构（朗读即状态页）：Editor 默认收起；次级入口用弹层承载
@@ -453,6 +460,7 @@ export default function App() {
   // 编辑器朗读时清掉「选中文字」标记
   const handleReadEditor = useCallback(() => {
     setSelectionChars(0);
+    setPlayerOpened(true); // 用户明确要读文本 → 展开播放器
     return handleRead();
   }, [handleRead]);
 
@@ -683,6 +691,15 @@ export default function App() {
     });
   }, []);
 
+  // ---- v2.4.0 IA：首屏派生状态 ----
+  // 首屏只显示「主用法 + 当前音色」，播放器要有真实内容/动作时才占主位。
+  const voiceList = (voiceStatus && voiceStatus.voices) || [];
+  const activeVoice =
+    voiceList.find((x) => x.id === voiceId) || voiceList.find((x) => x.isDefault) || voiceList[0] || null;
+  const heroVoiceName = activeVoice ? activeVoice.name || '' : '';
+  const hasEditorText = !!text.trim();
+  const playerActive = playerOpened || !!playback.hasAudio || !!playback.isPlaying;
+
   const voices = voiceStatus && Array.isArray(voiceStatus.voices) ? voiceStatus.voices : [];
   const currentVoice = voices.find((v) => v.id === voiceId);
   const voiceLabel = currentVoice ? currentVoice.displayName || currentVoice.name || '晓晓' : '晓晓';
@@ -738,30 +755,66 @@ export default function App() {
           {/* ⓪ v2.4.0 离线语音引导：本地引擎是延迟根治项，未安装时在顶部提示一键部署 */}
           <VoiceDeployGate />
 
-          {/* ① 当前句 + 超大播放控制 + 语速（一级） */}
-          <Controls
-            isPlaying={playback.isPlaying}
-            buffering={playback.buffering}
-            hasAudio={playback.hasAudio}
-            loading={playback.preparing}
-            currentMs={playback.currentMs}
-            totalMs={playback.totalMs}
-            sentences={playback.sentences}
-            currentSentence={playback.currentSentence}
-            hasText={!!textRef.current.trim()}
-            onRead={handleReadEditor}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            onStop={handleStop}
-            onSeek={playback.seekMs}
-            onJump={handleJump}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            onRateChange={(v) => setSettings({ rate: v })}
-            rate={rate}
-            selectionChars={selectionChars}
-            timerActive={playback.timerActive}
-          />
+          {/* ① v2.4.0 首屏状态卡：主用法「选中→F1」必须在第一眼位置 */}
+          <HeroStatus hotkey={hotkey || 'F1'} hotkeyOk={hotkeyOk} voiceName={heroVoiceName} />
+
+          {/* ② 播放器：只有真的在朗读 / 点过朗读时才占主位；否则给一行轻量入口 */}
+          {playerActive ? (
+            <Controls
+              isPlaying={playback.isPlaying}
+              buffering={playback.buffering}
+              hasAudio={playback.hasAudio}
+              loading={playback.preparing}
+              currentMs={playback.currentMs}
+              totalMs={playback.totalMs}
+              sentences={playback.sentences}
+              currentSentence={playback.currentSentence}
+              hasText={!!textRef.current.trim()}
+              onRead={handleReadEditor}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onStop={handleStop}
+              onSeek={playback.seekMs}
+              onJump={handleJump}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              onRateChange={(v) => setSettings({ rate: v })}
+              rate={rate}
+              selectionChars={selectionChars}
+              timerActive={playback.timerActive}
+            />
+          ) : (
+            <Box
+              sx={{
+                px: { xs: 1.5, md: 1.75 },
+                py: { xs: 1.25, md: 1.5 },
+                borderRadius: 3,
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 1.25,
+                flexShrink: 0,
+              }}
+            >
+              <Button
+                variant="outlined"
+                startIcon={<PlayArrowIcon sx={{ fontSize: fs(22) }} />}
+                onClick={handleReadEditor}
+                disabled={!hasEditorText}
+                sx={{ height: su(44), fontSize: fs(15), fontWeight: 700 }}
+              >
+                {hasEditorText ? '朗读下方文本' : '先导入或粘贴文本'}
+              </Button>
+              <Typography sx={{ fontSize: fs(14), color: 'text.secondary' }}>
+                {hasEditorText
+                  ? '也可以直接在任意程序里选中文字，按热键朗读'
+                  : '主要用法：在任意程序里选中文字，按热键直接朗读'}
+              </Typography>
+            </Box>
+          )}
 
           {/* ② 次级操作条：音色 / 导出 / 定时 / 参数——默认收起为一行，按需展开 */}
           <Box

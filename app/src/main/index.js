@@ -125,8 +125,19 @@ function createWindow() {
       // IPC 状态还没回来，立即截图会拍成「未加载」的初始帧（每次字节数都一样）。
       const delayArg = process.argv.find((a) => a.startsWith('--capture-delay='));
       const capDelay = delayArg ? Math.max(0, Number(delayArg.split('=')[1]) || 0) : 0;
+      // v2.4.0：--capture-scale=<1|1.25|1.5|2> 在截图前切到指定字号档位，
+      // 用于验证无障碍红线（2.0x 下不破版）。档位真源是 CSS 变量 --ldn-scale + html font-size。
+      const scaleArg = process.argv.find((a) => a.startsWith('--capture-scale='));
+      const capScale = scaleArg ? Number(scaleArg.split('=')[1]) || 1 : 1;
       setTimeout(async () => {
         try {
+          if (capScale !== 1) {
+            await win.webContents.executeJavaScript(
+              `document.documentElement.style.fontSize='${16 * capScale}px';` +
+                `document.documentElement.style.setProperty('--ldn-scale','${capScale}');`
+            );
+            await new Promise((r) => setTimeout(r, 700));
+          }
           const img = await win.webContents.capturePage();
           fs.mkdirSync(path.dirname(capturePath), { recursive: true });
           fs.writeFileSync(capturePath, img.toPNG());

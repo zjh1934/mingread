@@ -5,14 +5,22 @@ import { GraphicEq, Settings as SettingsIcon, DarkMode, LightMode, Contrast } fr
 import { fs, su } from '../theme';
 import announcer from '../services/announcer';
 
-// 状态灯：实心圆点=在线可用，空心圆环=连不上网络（形状冗余，色弱可辨）；点击重试
+// 状态灯：实心圆点=可用，空心圆环=不可用（形状冗余，色弱可辨）；点击重试
+// v2.4.0：本地引擎就绪时不能再叫「在线」——那时根本没有联网。按 engine.online 区分：
+//   本地（sapi）→「本地语音」；在线（edge）→「在线」；未就绪 →「声音不可用」。
 function StatusDot({ status, refreshing, onRefresh }) {
   const engine = (status && status.engine) || {};
-  const online = engine.ready !== false;
-  const label = online ? '在线' : '连不上网络';
+  const ready = engine.ready !== false;
+  const isLocal = ready && engine.online === false;
+  const label = !ready ? '声音不可用' : isLocal ? '本地语音' : '在线';
+  const tip = !ready
+    ? '当前没有可用语音，点击重新检测'
+    : isLocal
+      ? '本地语音已就绪（不联网、延迟最低），点击重新检测'
+      : '在线语音可用，点击重新检测';
 
   return (
-    <Tooltip title={online ? '语音在线可用，点击重新检测' : '点击重试连接'}>
+    <Tooltip title={tip}>
       <ButtonBase
         onClick={onRefresh}
         disabled={refreshing}
@@ -23,7 +31,7 @@ function StatusDot({ status, refreshing, onRefresh }) {
           gap: 0.75,
           border: '1px solid',
           borderColor: 'divider',
-          '&:hover': { borderColor: online ? 'success.main' : 'error.main' },
+          '&:hover': { borderColor: ready ? 'success.main' : 'error.main' },
         }}
       >
         {refreshing ? (
@@ -37,8 +45,8 @@ function StatusDot({ status, refreshing, onRefresh }) {
               aspectRatio: '1',
               borderRadius: '50%',
               flexShrink: 0,
-              // 形状冗余编码（色弱/灰度可辨）：在线=实心圆点，离线=空心圆环
-              ...(online
+              // 形状冗余编码（色弱/灰度可辨）：可用=实心圆点，不可用=空心圆环
+              ...(ready
                 ? { bgcolor: 'success.main', boxShadow: '0 0 0 3px rgba(74,222,128,0.16)' }
                 : {
                     bgcolor: 'transparent',
@@ -114,7 +122,9 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
             noWrap
             sx={{ display: { xs: 'none', sm: 'block' } }}
           >
-            选中文字按 F1 即读 · 晓晓 / 云希
+            {/* v2.4.0：副标题不再重复「按 F1 即读」与音色（首屏状态卡已讲清楚），
+                这里只留产品定位，避免同一信息在首屏出现三次 */}
+            低视力无障碍朗读工具
           </Typography>
         </Box>
 

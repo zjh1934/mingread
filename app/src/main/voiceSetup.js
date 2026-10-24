@@ -13,8 +13,26 @@ function onStatusChanged(cb) {
   return () => _statusListeners.delete(cb);
 }
 
-function broadcastStatus() {
-  const s = getStatus();
+/**
+ * 广播语音状态。
+ * v2.4.0 修正状态双源问题：状态的权威源是 ttsBridge.getStatus()（它合并了引擎链路的真相，
+ * 例如「现在跑的是本地 sapi 还是在线 edge」）。本模块的 getStatus() 只是兜底 base，
+ * 里面的 engine 还留着 Edge-only 时代的叙事（online: true / id: 'edge'）。
+ * 早前广播走的是 base，于是渲染层「拉」到的是正确状态、「推」到的是旧状态，
+ * 顶部徽标因此把本地引擎显示成「在线」。
+ * @param {object} [override] 已有权威状态时直接传入，避免重复计算
+ */
+function broadcastStatus(override) {
+  let s = override;
+  if (!s) {
+    try {
+      // 延迟 require：ttsBridge 顶部就 require 了本模块，顶层引用会形成循环依赖
+      // eslint-disable-next-line global-require
+      s = require('./ttsBridge').getBridge().getStatus();
+    } catch (e) {
+      s = getStatus();
+    }
+  }
   for (const cb of _statusListeners) {
     try {
       cb(s);
