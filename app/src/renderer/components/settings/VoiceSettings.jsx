@@ -8,6 +8,7 @@ import { useTts } from '../../hooks/useTts';
 import announcer from '../../services/announcer';
 import { SettingGroup, HelpText } from './rows';
 import VoicePicker from '../VoicePicker';
+import VoiceSourceSettings from './VoiceSourceSettings';
 
 function bridge() {
   return typeof window !== 'undefined' ? window.langdu : null;
@@ -89,18 +90,23 @@ export default function VoiceSettings({ notify }) {
   };
 
   return (
-    <SettingGroup title="音色" desc="配一次就不再改；试听不改变当前选择">
-      <Box>
-        <VoicePicker
-          status={voiceStatus}
-          value={voiceId}
-          onChange={handleSelect}
-          onPreview={handlePreview}
-          previewingId={previewingId}
-          inline
-        />
-      </Box>
-      <HelpText>音色只影响朗读使用的声线，语速 / 语调 / 音量在「朗读」分区调整。</HelpText>
-    </SettingGroup>
+    <>
+      <SettingGroup title="音色" desc="配一次就不再改；试听不改变当前选择">
+        <Box>
+          <VoicePicker
+            status={voiceStatus}
+            value={voiceId}
+            onChange={handleSelect}
+            onPreview={handlePreview}
+            previewingId={previewingId}
+            inline
+          />
+        </Box>
+        <HelpText>音色只影响朗读使用的声线，语速 / 语调 / 音量在「朗读」分区调整。</HelpText>
+      </SettingGroup>
+
+      {/* W-VOICESRC：发音人来源（内置源 + 用户自建仓库），与「一键安装离线语音」共用部署状态机 */}
+      <VoiceSourceSettings notify={notify} />
+    </>
   );
 }

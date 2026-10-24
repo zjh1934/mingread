@@ -5,11 +5,19 @@ import React from 'react';
 import { Box, Chip, Stack, TextField, Typography } from '@mui/material';
 import { Keyboard } from '@mui/icons-material';
 import { fs, su } from '../../theme';
-import { SettingGroup, HelpText } from './rows';
+import { SettingGroup, HelpText, SwitchRow } from './rows';
 
 const HOTKEY_CHIPS = ['F1', 'Ctrl+Alt+R', 'Ctrl+Alt+F1', 'Shift+F1'];
 
-export default function HotkeySettings({ hotkey, hotkeyOk, hotkeyDraft, setHotkeyDraft, onApply }) {
+export default function HotkeySettings({
+  hotkey,
+  hotkeyOk,
+  hotkeyDraft,
+  setHotkeyDraft,
+  onApply,
+  hotkeyCue = false,
+  onToggleCue,
+}) {
   return (
     <SettingGroup
       title="划词朗读热键"
@@ -77,6 +85,19 @@ export default function HotkeySettings({ hotkey, hotkeyOk, hotkeyDraft, setHotke
       <HelpText>
         热键被其他程序占用时不会静默失败：右上角会显示「注册失败」并语音提示，请换一个组合或关闭占用它的程序。
       </HelpText>
+
+      {/* v2.4.0：用户反馈「选中以后按完热键它会滴的一声，这一声没有必要」→ 默认关，留开关 */}
+      <Box sx={{ mt: 1 }}>
+        <SwitchRow
+          label="按热键时播放「滴」提示音"
+          desc="默认关闭。本地语音约 150 毫秒就出声，提示音反而像干扰；打开后每次按热键会先响一声再开始朗读。"
+          checked={!!hotkeyCue}
+          onChange={(next) => {
+            // SwitchRow 回传的是布尔值（不是事件对象）
+            if (typeof onToggleCue === 'function') onToggleCue(next);
+          }}
+        />
+      </Box>
     </SettingGroup>
   );
 }

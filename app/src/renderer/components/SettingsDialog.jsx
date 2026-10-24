@@ -52,6 +52,7 @@ export default function SettingsDialog({ open, onClose, status, notify, playback
   const hotkey = useSettings((s) => s.hotkey);
   const hotkeyOk = useSettings((s) => s.hotkeyOk);
   const clipboardAuto = useSettings((s) => s.clipboardAuto);
+  const hotkeyCue = useSettings((s) => s.hotkeyCue);
   const rate = useSettings((s) => s.rate);
   const pitch = useSettings((s) => s.pitch);
   const volume = useSettings((s) => s.volume);
@@ -220,6 +221,8 @@ export default function SettingsDialog({ open, onClose, status, notify, playback
                 hotkeyDraft={hotkeyDraft}
                 setHotkeyDraft={setHotkeyDraft}
                 onApply={applyHotkey}
+                hotkeyCue={hotkeyCue}
+                onToggleCue={(next) => toggleSystemFlag('hotkeyCue', next, '热键提示音')}
               />
 
               <SettingGroup title="快速朗读" desc="不选中文字也能读：复制或按热键读剪贴板">

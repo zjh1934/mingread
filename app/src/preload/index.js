@@ -30,11 +30,26 @@ const api = {
     getState: () => ipcRenderer.invoke('voice:deploy:getState'),
     detect: () => ipcRenderer.invoke('voice:deploy:detect'),
     install: () => ipcRenderer.invoke('voice:deploy:install'),
+    /** W-VOICESRC：从音色源清单里装单个音色（key 见 list().voices[].key） */
+    installVoice: (key) => ipcRenderer.invoke('voice:deploy:installVoice', key),
     onStateChanged: (cb) => {
       const listener = (_e, payload) => cb(payload);
       ipcRenderer.on('voice:deploy:state', listener);
       return () => ipcRenderer.removeListener('voice:deploy:state', listener);
     },
+  },
+
+  // W-VOICESRC 音色源：内置源 + 用户自建仓库（https 清单或本地 .json）
+  voiceSources: {
+    /** 载入并合并全部源（逐源降级：坏源只体现在 sources[].error / errors[]） */
+    list: () => ipcRenderer.invoke('voice:source:list'),
+    /** 丢弃缓存重新抓取（用户源改动后手动刷新） */
+    refresh: () => ipcRenderer.invoke('voice:source:refresh'),
+    /** 添加源：{ location: 'https://…/voices.json' } 或 { location: 'C:\\…\\voices.json', name? } */
+    add: (payload) => ipcRenderer.invoke('voice:source:add', payload || {}),
+    remove: (id) => ipcRenderer.invoke('voice:source:remove', id),
+    /** 打开本地清单选择器，返回绝对路径或 null */
+    pickFile: () => ipcRenderer.invoke('voice:source:pick'),
   },
 
   // 划词朗读

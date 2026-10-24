@@ -9,6 +9,12 @@
 //      中途失败后再次 install() 从断点继续，不重复下载 140MB、不重复弹 UAC。
 //   4. 不阻塞热键路径：本模块只被用户显式触发（或首启检测），任何探测都不在朗读链路上。
 //
+// W-VOICESRC：安装目标不再写死在下载/解压函数里，而由音色源清单（voiceSources）解析成 plan：
+//   内置源（voicePackSources.defaultManifest）给出的 plan 与旧的「三件套」逐字段等价
+//   （file/urls 顺序、sizeBytes、解压目录全同），并用 tmp_probe_WVOICESRC.js 做等价比对；
+//   用户自建源只能**新增**音色，引擎 DLL 永远来自内置 pin（不允许远端清单下发要 regsvr32 的 DLL）。
+//   新增 installVoice(key) 只装清单里的一个音色，状态机分支与 install() 完全共用。
+//
 // 状态机（完整分支见交付回执「状态机分支清单」）：
 //   IDLE → DETECTING → READY
 //                    ├→ INSTALLING_NETFX3（.NET 3.5 缺失：与注册合并为一次授权）
@@ -20,9 +26,11 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 
 const S = require('./voicePackSources');
+const V = require('./voiceSources');
 const { extractAll } = require('./zipUtils');
 const { readNvsaConfig } = require('./backends/sapiBackend');
 const { pickSapiVoices } = require('./backends/voiceCatalog');
@@ -257,6 +265,106 @@ class VoiceDeploy {
     return path.join(this.engineDir, MARKER);
   }
 
+  // ---- 安装计划（W-VOICESRC：目标来自音色源清单，不再是散落常量）----
+
+  /**
+   * 把「装哪些 key」解析成一份可执行的 plan。
+   *
+   * @param {string[]} [keys] 不传 = 内置默认（晓晓 + 云希）
+   * @param {{builtinOnly?:boolean}} [opts] builtinOnly = 只认内置 pin（一键安装走这条，
+   *   保证即使某个用户源覆盖了同 key，默认安装结果仍与改造前逐字段等价）
+   * @returns {{keys:string[], default:boolean, voices:Array, targets:Array, totalBytes:number, label:string}}
+   */
+  _plan(keys, opts) {
+    const o = opts || {};
+    const requested = Array.isArray(keys) && keys.length ? keys.map((k) => String(k).trim()).filter(Boolean) : S.VOICE_PACKS.map((p) => p.id);
+    const defaultKeys = S.VOICE_PACKS.map((p) => p.id);
+    const isDefault = requested.length === defaultKeys.length && requested.every((k) => defaultKeys.indexOf(k) >= 0);
+    const builtinList = o.builtinOnly ? V.builtinVoices() : null;
+
+    // 引擎（NVSA 适配器）永远来自内置 pin：远端清单不允许提供要 regsvr32 的 DLL
+    const targets = [
+      {
+        id: 'nvsa',
+        label: `NaturalVoiceSAPIAdapter ${S.NVSA.version}`,
+        urls: S.NVSA.asset.urls,
+        fileName: S.NVSA.asset.fileName,
+        sizeBytes: S.NVSA.asset.sizeBytes,
+        sha256: null,
+        kind: 'adapter',
+      },
+    ];
+    const voices = [];
+    const seen = new Set();
+
+    for (const key of requested) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const v = builtinList ? builtinList.find((x) => x.key === key) : V.findVoiceSync(key);
+      if (!v) {
+        const e = new Error(`未知音色：${key}（源清单里没有这一项）`);
+        e.code = 'VOICE_UNKNOWN';
+        throw e;
+      }
+      if (v.engine !== 'nvsa-sapi') {
+        const e = new Error(`音色「${v.displayName}」的引擎 ${v.engine} 当前不支持安装`);
+        e.code = 'VOICE_ENGINE';
+        throw e;
+      }
+      const files = (v.files || []).map((f) => ({
+        fileName: f.fileName,
+        dirName: f.dirName || V.dirNameOf(f.fileName),
+        urls: Array.isArray(f.urls) && f.urls.length ? f.urls.slice() : [f.url],
+        sizeBytes: f.sizeBytes,
+        sha256: f.sha256 || null,
+      }));
+      if (!files.length) {
+        const e = new Error(`音色「${v.displayName}」没有可下载的文件`);
+        e.code = 'VOICE_FILES';
+        throw e;
+      }
+      voices.push({
+        key: v.key,
+        displayName: v.displayName,
+        dirName: files[0].dirName,
+        files,
+        builtin: !!v.builtin,
+        sourceId: v.sourceId || 'builtin',
+        keywords: v.keywords || [],
+      });
+      files.forEach((f, i) => {
+        targets.push({
+          // 单文件音色的 id 直接用 key：与改造前 downloadTargets() 的 id 逐字段一致
+          id: files.length === 1 ? v.key : `${v.key}#${i}`,
+          label: `语音包 ${v.displayName}`,
+          urls: f.urls,
+          fileName: f.fileName,
+          sizeBytes: f.sizeBytes,
+          sha256: f.sha256,
+          kind: 'voice',
+        });
+      });
+    }
+
+    const totalBytes = targets.reduce((s, t) => s + (Number(t.sizeBytes) || 0), 0);
+    return {
+      keys: requested,
+      default: isDefault,
+      voices,
+      targets,
+      totalBytes,
+      label: isDefault ? '离线语音组件' : `音色「${voices.map((v) => v.displayName).join('、')}」`,
+    };
+  }
+
+  /** 引擎 DLL + 计划内全部语音目录是否都已就位 */
+  _filesReady(plan) {
+    if (!fs.existsSync(this.engineDllPath)) return false;
+    return (plan.voices || []).every((v) =>
+      (v.files || []).every((f) => dirHasFiles(path.join(this.voicesDir, f.dirName)))
+    );
+  }
+
   // ---- 状态 ----
 
   get state() {
@@ -486,12 +594,17 @@ class VoiceDeploy {
     };
   }
 
-  _probeFiles() {
+  _probeFiles(voices) {
     const dll = this.engineDllPath;
     const engineOk = fs.existsSync(dll);
-    const packs = S.VOICE_PACKS.map((p) => {
-      const dir = path.join(this.voicesDir, S.msixDirName(p));
-      return { id: p.id, displayName: p.displayName, dir, ok: dirHasFiles(dir) };
+    // 不传 voices = 内置默认计划（与改造前 S.VOICE_PACKS 的三项完全一致）
+    const list = Array.isArray(voices) && voices.length ? voices : this._plan(null, { builtinOnly: true }).voices;
+    const packs = list.map((v) => {
+      // 一个音色可能有多个归档（files[]），每个都要落地才算完整
+      const dirs = (Array.isArray(v.files) && v.files.length ? v.files : [{ dirName: v.dirName }]).map((f) =>
+        path.join(this.voicesDir, f.dirName || V.dirNameOf((f && f.fileName) || ''))
+      );
+      return { id: v.key, displayName: v.displayName, dir: dirs[0], dirs, ok: dirs.every((d) => dirHasFiles(d)) };
     });
     const ok = engineOk && packs.every((p) => p.ok);
     return {
@@ -563,9 +676,47 @@ class VoiceDeploy {
 
   /**
    * 一键部署（幂等、可重入）。并发调用直接返回 DEPLOY_BUSY。
+   * 安装范围 = **内置 pin**（晓晓 + 云希），与改造前完全一致：
+   * 即使用户源覆盖了同名的 key，这里也不受影响（覆盖项只能从「发现的音色」单独安装）。
    * @returns {Promise<{ok:boolean, state:string, error?:{code:string,message:string,nextStep:string}, snapshot:object}>}
    */
   async install() {
+    return this._runInstall(this._plan(null, { builtinOnly: true }));
+  }
+
+  /**
+   * 只安装单个音色（来自任意音色源）。状态机、失败分支、UAC 次数与 install() 完全共用，
+   * 差别只有「下载哪些文件」与「验证哪些目录」。
+   * @param {string} key 清单里的 voice.key
+   */
+  async installVoice(key) {
+    const k = String(key == null ? '' : key).trim();
+    if (!k) {
+      return {
+        ok: false,
+        code: 'VOICE_UNKNOWN',
+        state: this.state,
+        message: '没有指定要安装的音色。',
+        snapshot: this.getSnapshot(),
+      };
+    }
+    let plan;
+    try {
+      plan = this._plan([k]);
+    } catch (e) {
+      // 解析阶段就失败（未知 key / 不支持的引擎）：不改状态、不弹 UAC，直接把原因给 UI
+      return {
+        ok: false,
+        code: (e && e.code) || 'VOICE_UNKNOWN',
+        state: this.state,
+        message: (e && e.message) || String(e),
+        snapshot: this.getSnapshot(),
+      };
+    }
+    return this._runInstall(plan);
+  }
+
+  async _runInstall(plan) {
     if (this._busy) {
       return {
         ok: false,
@@ -577,7 +728,7 @@ class VoiceDeploy {
     }
     this._busy = true;
     try {
-      const res = await this._installInner();
+      const res = await this._installInner(plan);
       return { ...res, snapshot: this.getSnapshot() };
     } catch (e) {
       return { ...this._failFrom(e), snapshot: this.getSnapshot() };
@@ -586,13 +737,18 @@ class VoiceDeploy {
     }
   }
 
-  async _installInner() {
+  async _installInner(plan) {
     // 1) DETECTING
     this._setState(STATES.DETECTING, 1, '正在检测本地语音环境…');
     const det = await this._detectPass();
     this._checks = det;
-    if (det.ready) {
-      await this._markReady({ alreadyReady: true });
+    // 默认计划沿用原来的「四项全绿就短路」；自定义计划按它自己的目录判断，不能被默认两项的结论带跑
+    if (plan.default && det.ready) {
+      await this._markReady({ alreadyReady: true, plan });
+      return { ok: true, state: STATES.READY, alreadyReady: true };
+    }
+    if (!plan.default && this._filesReady(plan) && this._probeRegistry().status === 'PRESENT') {
+      await this._markReady({ alreadyReady: true, plan });
       return { ok: true, state: STATES.READY, alreadyReady: true };
     }
 
@@ -611,14 +767,14 @@ class VoiceDeploy {
     }
 
     // 2) DOWNLOADING（已有且字节数正确的文件直接跳过）
-    if (!(det.files.ok && det.files.engineOk && det.files.packs.every((p) => p.ok))) {
-      await this._downloadPhase();
+    if (!this._filesReady(plan)) {
+      await this._downloadPhase(plan);
     }
 
     // 3) EXTRACTING
-    const filesNow = this._probeFiles();
+    const filesNow = this._probeFiles(plan.voices);
     if (!filesNow.engineOk || !filesNow.packs.every((p) => p.ok)) {
-      await this._extractPhase();
+      await this._extractPhase(plan);
     }
 
     // 4) REGISTERING（一次 UAC：NetFx3[仅缺失时] + regsvr32）
@@ -629,27 +785,35 @@ class VoiceDeploy {
     await this._configPhase();
 
     // 6) VERIFYING
-    const verified = await this._verifyPhase();
+    const verified = await this._verifyPhase(plan);
 
     // 7) READY
-    await this._markReady({ checks: verified });
+    await this._markReady({ checks: verified, plan });
     return { ok: true, state: STATES.READY };
   }
 
   // ---- 下载 ----
 
-  async _downloadPhase() {
+  async _downloadPhase(plan) {
     ensureDir(this.workDir);
-    const targets = S.downloadTargets();
+    const targets = plan.targets;
     const total = targets.reduce((s, t) => s + t.sizeBytes, 0) || 1;
     let done = 0;
+    // 默认计划的文案与改造前逐字一致（用户能感知的文案也是回归面）
+    const headLabel = plan.default
+      ? '正在下载离线语音组件（约 138 MB）…'
+      : `正在下载${plan.label}（约 ${Math.max(1, Math.round(total / 1048576))} MB）…`;
 
-    this._setState(STATES.DOWNLOADING, 5, '正在下载离线语音组件（约 138 MB）…');
-    await this._announce('开始下载离线语音组件，约一百三十八兆，请保持网络连接。');
+    this._setState(STATES.DOWNLOADING, 5, headLabel);
+    await this._announce(
+      plan.default
+        ? '开始下载离线语音组件，约一百三十八兆，请保持网络连接。'
+        : `开始下载${plan.label}，约 ${Math.max(1, Math.round(total / 1048576))} 兆，请保持网络连接。`
+    );
 
     for (const t of targets) {
       const dest = path.join(this.workDir, t.fileName);
-      if (this._sizeMatches(dest, t.sizeBytes)) {
+      if (await this._targetPresent(t, dest)) {
         done += t.sizeBytes;
         this._setState(STATES.DOWNLOADING, 5 + (done / total) * 50, `${t.label} 已存在，跳过下载`);
         continue;
@@ -669,6 +833,29 @@ class VoiceDeploy {
     return fileSize(p) === expect;
   }
 
+  /** 文件 sha256（流式，避免把 140MB 读进内存）；失败返回 null */
+  _sha256Of(p) {
+    return new Promise((resolve) => {
+      try {
+        const h = crypto.createHash('sha256');
+        const rs = fs.createReadStream(p);
+        rs.on('error', () => resolve(null));
+        rs.on('data', (c) => h.update(c));
+        rs.on('end', () => resolve(h.digest('hex')));
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  /** 目标文件是否已就位：体积必须一致；清单给了 sha256 时还要强校验内容 */
+  async _targetPresent(target, dest) {
+    if (!this._sizeMatches(dest, target.sizeBytes)) return false;
+    if (!target.sha256) return true;
+    const got = await this._sha256Of(dest);
+    return got === target.sha256;
+  }
+
   async _downloadOne(target, onBytes) {
     if (!this._fetch) {
       throw this._err(S.VP_ERRORS.NETWORK, '当前运行环境不支持网络下载（缺少 fetch）', DEFAULT_NEXT_STEP);
@@ -679,6 +866,18 @@ class VoiceDeploy {
       for (const url of target.urls) {
         try {
           await this._fetchTo(url, target, dest, onBytes);
+          // 清单给了 sha256 就必须强校验：体积对了但内容不对（镜像投毒/串包）也不能进解压
+          if (target.sha256) {
+            const got = await this._sha256Of(dest);
+            if (got !== target.sha256) {
+              try {
+                fs.rmSync(dest, { force: true });
+              } catch (e2) {
+                /* 忽略 */
+              }
+              throw new Error(`内容校验失败：sha256 期望 ${target.sha256.slice(0, 12)}…，实际 ${String(got).slice(0, 12)}…`);
+            }
+          }
           return;
         } catch (e) {
           errors.push({ round, url, message: tail(e.message, 160) });
@@ -788,31 +987,48 @@ class VoiceDeploy {
 
   // ---- 解压 ----
 
-  async _extractPhase() {
+  async _extractPhase(plan) {
     ensureDir(this.voicesDir);
-    this._setState(STATES.EXTRACTING, 56, '正在解压语音引擎…');
+    const p = plan || this._plan(null, { builtinOnly: true });
+    // 默认计划与改造前一致：整包重解（引擎目录会重建，.registered 标记随之失效，注册步骤照旧重跑）。
+    // 自定义音色：引擎已经就位就不再动 engine 目录 —— 否则会误删注册标记，为补一个音色白弹一次 UAC。
+    const enginePresent = fs.existsSync(this.engineDllPath);
+    const needEngine = p.default || !enginePresent;
+    this._setState(STATES.EXTRACTING, 56, needEngine ? '正在解压语音引擎…' : `正在解压${p.label}…`);
     try {
-      const zip = path.join(this.workDir, S.NVSA.asset.fileName);
-      if (!fs.existsSync(zip)) throw new Error(`缺少安装包：${zip}`);
-      fs.rmSync(this.engineDir, { recursive: true, force: true });
-      ensureDir(this.engineDir);
-      extractAll(zip, this.engineDir, (doneEntries, totalEntries) => {
-        this._setState(STATES.EXTRACTING, 56 + (totalEntries ? (doneEntries / totalEntries) * 8 : 0), '正在解压语音引擎…');
-      });
-      const dll = this.engineDllPath;
-      if (!fs.existsSync(dll)) throw new Error(`解压后未找到 x64 引擎 DLL：${dll}`);
+      if (needEngine) {
+        const zip = path.join(this.workDir, S.NVSA.asset.fileName);
+        if (!fs.existsSync(zip)) throw new Error(`缺少安装包：${zip}`);
+        fs.rmSync(this.engineDir, { recursive: true, force: true });
+        ensureDir(this.engineDir);
+        extractAll(zip, this.engineDir, (doneEntries, totalEntries) => {
+          this._setState(STATES.EXTRACTING, 56 + (totalEntries ? (doneEntries / totalEntries) * 8 : 0), '正在解压语音引擎…');
+        });
+        const dll = this.engineDllPath;
+        if (!fs.existsSync(dll)) throw new Error(`解压后未找到 x64 引擎 DLL：${dll}`);
+      }
 
       let i = 0;
-      for (const pack of S.VOICE_PACKS) {
+      for (const voice of p.voices) {
         i += 1;
-        const base = 64 + ((i - 1) / S.VOICE_PACKS.length) * 10;
-        this._setState(STATES.EXTRACTING, base, `正在解压语音包 ${pack.displayName}…`);
-        const msix = path.join(this.workDir, pack.fileName);
-        if (!fs.existsSync(msix)) throw new Error(`缺少语音包：${msix}`);
-        const dir = path.join(this.voicesDir, S.msixDirName(pack));
-        fs.rmSync(dir, { recursive: true, force: true });
-        extractAll(msix, dir);
-        if (!dirHasFiles(dir)) throw new Error(`语音包 ${pack.displayName} 解压结果为空`);
+        const base = 64 + ((i - 1) / p.voices.length) * 10;
+        this._setState(STATES.EXTRACTING, base, `正在解压语音包 ${voice.displayName}…`);
+        for (const f of voice.files) {
+          const archive = path.join(this.workDir, f.fileName);
+          if (!fs.existsSync(archive)) throw new Error(`缺少语音包：${archive}`);
+          // 落点：voices/<归档名去掉后缀>。dirName 由清单校验阶段保证不含路径成分，
+          // 这里再 assert 一次「落点必须在 voicesDir 内」，防止上游被绕过时越界写入。
+          const dir = path.join(this.voicesDir, f.dirName);
+          const rel = path.relative(this.voicesDir, dir);
+          if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+            throw new Error(`语音包落点越界：${f.dirName}`);
+          }
+          // 自定义音色补齐安装：已经解压好的目录不重解（省时间，也避免半路失败毁掉可用状态）
+          if (!p.default && dirHasFiles(dir)) continue;
+          fs.rmSync(dir, { recursive: true, force: true });
+          extractAll(archive, dir);
+          if (!dirHasFiles(dir)) throw new Error(`语音包 ${voice.displayName} 解压结果为空`);
+        }
       }
       this._setState(STATES.EXTRACTING, 74, '语音组件解压完成');
     } catch (e) {
@@ -1020,10 +1236,11 @@ class VoiceDeploy {
 
   // ---- 验证（四级）----
 
-  async _verifyPhase() {
+  async _verifyPhase(plan) {
+    const p = plan || this._plan(null, { builtinOnly: true });
     // 一级：文件层
     this._setState(STATES.VERIFYING, 90, '正在校验引擎文件…');
-    const files = this._probeFiles();
+    const files = this._probeFiles(p.voices);
     if (!files.ok) {
       throw this._err(
         S.VP_ERRORS.VERIFY_FAILED,
@@ -1046,7 +1263,12 @@ class VoiceDeploy {
     // 三级：新进程枚举（regsvr32 之后同进程缓存不会刷新，必须新开进程）
     this._setState(STATES.VERIFYING, 94, '正在重新枚举系统语音（新进程）…');
     const voices = await this._probeVoices();
-    if ((voices.matched || []).length < 2) {
+    // 只有「应用音色目录里认得」的 key 才能要求枚举命中（catalog 当前是晓晓/云希）；
+    // 用户源带来的新 key 允许「已落地但尚未接入选择列表」，不能因此在文件/注册都 OK 时失败。
+    const catalogKeys = ['xiaoxiao', 'yunxi'];
+    const needKeys = p.voices.map((v) => v.key).filter((k) => catalogKeys.indexOf(k) >= 0);
+    const haveKeys = (voices.matched || []).map((m) => m.key);
+    if (needKeys.some((k) => haveKeys.indexOf(k) < 0)) {
       throw this._err(
         S.VP_ERRORS.VERIFY_FAILED,
         `验证失败（枚举层）：${voices.message}`,
@@ -1054,15 +1276,19 @@ class VoiceDeploy {
       );
     }
 
-    // 四级：试合成「测试」——走 ttsBridge 公共 API（不直接碰后端实现）
-    this._setState(STATES.VERIFYING, 96, '正在试合成「测试」…');
-    const synth = await this._testSynth();
-    if (!synth.ok) {
-      throw this._err(
-        S.VP_ERRORS.VERIFY_FAILED,
-        `验证失败（试合成）：${synth.message}`,
-        '已注册但本进程还没刷新语音缓存，重启应用通常即可；' + DEFAULT_NEXT_STEP
-      );
+    // 四级：试合成「测试」——走 ttsBridge 公共 API（不直接碰后端实现）。
+    // 只对「装了晓晓」的计划做：试合成固定用 sapi:xiaoxiao，纯自定义音色的安装不该被它拖累。
+    let synth = { ok: true, skipped: true };
+    if (p.voices.some((v) => v.key === 'xiaoxiao')) {
+      this._setState(STATES.VERIFYING, 96, '正在试合成「测试」…');
+      synth = await this._testSynth();
+      if (!synth.ok) {
+        throw this._err(
+          S.VP_ERRORS.VERIFY_FAILED,
+          `验证失败（试合成）：${synth.message}`,
+          '已注册但本进程还没刷新语音缓存，重启应用通常即可；' + DEFAULT_NEXT_STEP
+        );
+      }
     }
 
     this._setState(STATES.VERIFYING, 99, '验证通过');
@@ -1119,7 +1345,15 @@ class VoiceDeploy {
     }
     this._broadcastVoiceStatus();
     if (!info || !info.alreadyReady) {
-      await this._announce('离线语音安装完成，晓晓和云希现在都能在没网的时候朗读了。');
+      const plan = info && info.plan;
+      if (plan && !plan.default) {
+        // 自定义音色：不说「晓晓/云希已就绪」（会误导），只报这次装的是什么
+        await this._announce(
+          `${plan.label} 已安装到本机语音库。应用内选择列表接入这个音色需要后续版本支持。`
+        );
+      } else {
+        await this._announce('离线语音安装完成，晓晓和云希现在都能在没网的时候朗读了。');
+      }
     }
   }
 

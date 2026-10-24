@@ -48,6 +48,10 @@ function defaults() {
     // v2.3.1 剪贴板「复制即读」：低视力场景刚需，默认开（基线 P1-9），带节流与长度上限；
     // 用户可在设置里关掉（存了 false 的老配置不受影响）
     clipboardAuto: true,
+    // v2.4.0：按热键时的「滴」提示音。默认**关**——用户反馈「选中以后按完热键它会滴的一声，
+    // 这一声没有必要」：本地引擎 150ms 就出声，提示音反而像干扰；无声选区时也有语音播报兜底。
+    // 需要即时确认感的用户可在 设置 → 常用 里打开。
+    hotkeyCue: false,
     // 桌面悬浮球（鼠标入口），默认开
     floatBallEnabled: true,
     // 悬浮球位置 {x,y} | null（null = 默认右下角）
@@ -61,6 +65,9 @@ function defaults() {
     // α-视觉增强（低视力）：字号档位 1 / 1.25 / 1.5 / 2，桌面悬浮球尺寸 56 / 80 / 112
     fontScale: 1,
     floatBallSize: 56,
+    // W-VOICESRC 音色源：用户自己添加的仓库（[{id, kind:'url'|'file', location, name}]）。
+    // 内置源不进这里（它由 voicePackSources 的 pin 提供），所以空数组 = 只有内置源。
+    voiceSources: [],
   };
 }
 

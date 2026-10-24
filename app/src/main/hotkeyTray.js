@@ -67,8 +67,18 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
   /** 本模块自己注册成功的朗读热键；只注销它，绝不动别人（缩放）的热键 */
   let registeredAccel = '';
 
-  /** 热键按下的即时反馈（基线指标 E）。第一行调用，不 await，不阻塞抓选区 */
+  /** 热键按下的即时反馈（v2.4.0 起默认关闭，见 settingsStore.hotkeyCue） */
   function firePressCue(t0) {
+    // 用户反馈：选中文字按热键后「滴」一声没必要（本地引擎 150ms 就出声，提示音像干扰）。
+    // 默认关；仅在设置里显式打开时才播。注意：这里只跳过**提示音**，
+    // 朗读链路与「没有选中文字」的语音播报完全不受影响。
+    try {
+      // eslint-disable-next-line global-require
+      if (!require('./settingsStore').getSettings().hotkeyCue) return;
+    } catch (e) {
+      /* 读设置失败就保持静音（宁可少一声，也不要误响） */
+      return;
+    }
     try {
       const p = a11y.cue('press');
       if (p && typeof p.then === 'function') {

@@ -36,6 +36,8 @@ export const useSettings = create(
       // ---- 系统设置（主进程权威，仅运行时同步，不持久化）----
       hotkey: 'F1',
       clipboardAuto: true,
+      // v2.4.0：按热键的「滴」提示音，默认关（用户反馈没必要）
+      hotkeyCue: false,
       floatBallEnabled: true,
       hotkeyOk: undefined, // undefined=尚未同步；true=已注册；false=被占用
 
@@ -50,6 +52,7 @@ export const useSettings = create(
         const patch = {};
         if (typeof s.hotkey === 'string' && s.hotkey) patch.hotkey = s.hotkey;
         if (typeof s.clipboardAuto === 'boolean') patch.clipboardAuto = s.clipboardAuto;
+        if (typeof s.hotkeyCue === 'boolean') patch.hotkeyCue = s.hotkeyCue;
         if (typeof s.floatBallEnabled === 'boolean') patch.floatBallEnabled = s.floatBallEnabled;
         if (typeof s.hotkeyOk === 'boolean') patch.hotkeyOk = s.hotkeyOk;
         if (Object.keys(patch).length) set(patch);

@@ -10,6 +10,7 @@ const exporter = require('./exporter');
 const { readSelection } = require('./selectionReader');
 const { registerA11yIpc } = require('./a11yFeedback');
 const settingsStore = require('./settingsStore');
+const voiceSources = require('./voiceSources');
 const { startClipboardMonitor } = require('./clipboardMonitor');
 const floatBall = require('./floatBall');
 const zoomController = require('./zoomController');
@@ -208,7 +209,77 @@ function registerIpc(getWindow, state) {
   ipcMain.handle('voice:deploy:getState', () => voiceDeploy.getSnapshot());
   ipcMain.handle('voice:deploy:detect', () => voiceDeploy.detect({ announce: false }));
   ipcMain.handle('voice:deploy:install', () => voiceDeploy.install());
+  // W-VOICESRC：只装「某个音色源里的一件」；状态机与 install() 共用，失败分支一致
+  ipcMain.handle('voice:deploy:installVoice', (_e, key) => voiceDeploy.installVoice(key));
   voiceDeploy.onStateChanged((s) => sendToWindow(getWindow, 'voice:deploy:state', s));
+
+  // ---- W-VOICESRC 音色源（用户自建仓库）----
+  // 这里只做「增删查」：清单的抓取/校验/合并在 voiceSources.js，UI 不碰文件与网络。
+  const voiceSourceEntries = () => {
+    try {
+      const s = settingsStore.getSettings();
+      return Array.isArray(s.voiceSources) ? s.voiceSources : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const listVoiceSources = async () => {
+    try {
+      return await voiceSources.loadSources();
+    } catch (e) {
+      return {
+        ok: false,
+        at: Date.now(),
+        sources: [],
+        voices: voiceSources.builtinVoices(),
+        warnings: [],
+        errors: [{ sourceId: 'builtin', code: 'SRC_LOAD', message: e.message || String(e) }],
+      };
+    }
+  };
+
+  ipcMain.handle('voice:source:list', () => listVoiceSources());
+  ipcMain.handle('voice:source:refresh', async () => {
+    voiceSources.invalidateCache();
+    return listVoiceSources();
+  });
+
+  ipcMain.handle('voice:source:add', async (_e, payload) => {
+    const made = voiceSources.makeSourceEntry(payload || {});
+    if (!made.ok) return { ok: false, error: made.error };
+    const prev = voiceSourceEntries();
+    // 同一地址重复添加 = 更新（id 由地址派生），不会在列表里出现两条
+    const next = prev.filter((x) => !x || x.id !== made.entry.id).concat([{ ...made.entry, addedAt: Date.now() }]);
+    settingsStore.saveSettings({ voiceSources: next });
+    voiceSources.invalidateCache();
+    const result = await listVoiceSources();
+    const source = result.sources.find((s) => s.id === made.entry.id) || null;
+    return { ok: true, entry: made.entry, source, result };
+  });
+
+  ipcMain.handle('voice:source:remove', (_e, id) => {
+    const key = typeof id === 'string' ? id.trim() : '';
+    if (!key) return { ok: false, error: { code: 'SRC_ENTRY_INVALID', message: '缺少要删除的源 id' } };
+    const next = voiceSourceEntries().filter((x) => !x || x.id !== key);
+    settingsStore.saveSettings({ voiceSources: next });
+    voiceSources.invalidateCache();
+    return { ok: true, voiceSources: next };
+  });
+
+  // 本地清单选择器：只认 .json，避免用户误选别的文件
+  ipcMain.handle('voice:source:pick', async () => {
+    const win = getWindow();
+    const res = await dialog.showOpenDialog(win || undefined, {
+      title: '选择音色源清单（JSON）',
+      properties: ['openFile'],
+      filters: [
+        { name: '音色源清单', extensions: ['json'] },
+        { name: '所有文件', extensions: ['*'] },
+      ],
+    });
+    return res.canceled || !res.filePaths || !res.filePaths.length ? null : res.filePaths[0];
+  });
 
   // 试听
   ipcMain.handle('voice:preview', async (_e, payload) => {

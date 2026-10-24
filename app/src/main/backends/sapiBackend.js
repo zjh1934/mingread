@@ -9,7 +9,13 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { SapiHost, b64 } = require('./sapiHost');
-const { SAPI_VOICES, voiceKeyOf, pickSapiVoices } = require('./voiceCatalog');
+const {
+  SAPI_VOICES,
+  voiceKeyOf,
+  pickSapiVoices,
+  registerDynamicVoices,
+  clearDynamicVoices,
+} = require('./voiceCatalog');
 const { ENGINE_ERR, LOCAL_REASON, LOCAL_REASON_TEXT } = require('./engineErrors');
 const { splitSentences, proportionalSentenceMarks } = require('../util');
 
@@ -111,6 +117,10 @@ function readNvsaConfig() {
 class SapiBackend {
   constructor(opts = {}) {
     this._probe = null; // { at, value }
+    // 动态音色（音色源注册）状态：启动即后台载入，失败静默不阻塞探测
+    this._dyn = { started: false, ready: false, registered: 0, keys: [], error: null, at: null };
+    this._dynLoad = null;
+    this._dynGen = 0; // 代次：重建时丢弃上一轮在途结果，避免旧清单覆盖新目录
     this._host =
       opts.host ||
       new SapiHost({
@@ -118,6 +128,87 @@ class SapiBackend {
         // 这里绝不 await 到任何朗读路径上——onDead 只由 sapiHost 的 60s 定时器触发。
         onDead: (err) => this._onHostDead(err),
       });
+    this._startDynamicVoices();
+  }
+
+  /**
+   * 载入音色源里的「非内置」音色并注册进 voiceCatalog，让它们能被 listVoices / synthesize 选中。
+   * 全程后台进行：任何失败（无 settingsStore、网络坏、清单不合法）只记录在 getInfo().dynamicVoices，
+   * 绝不影响 probe / 合成 —— 装不上音色源不该让本地语音整体不可用。
+   */
+  _startDynamicVoices() {
+    if (this._dynLoad) return this._dynLoad;
+    this._dyn.started = true;
+    const gen = this._dynGen;
+    this._dynLoad = (async () => {
+      try {
+        // 延迟 require：纯 Node 探针/测试里也安全（voiceSources 内部对 settingsStore 缺失已做降级）
+        // eslint-disable-next-line global-require
+        const voiceSources = require('../voiceSources');
+        const res = await voiceSources.loadSources({ noCache: true });
+        if (gen !== this._dynGen) return this._dyn; // 期间已重建，本轮结果作废
+        const list = (res && Array.isArray(res.voices) ? res.voices : [])
+          .filter((v) => v && v.key && !v.builtin) // 只取用户源带来的新音色：内置项已在目录里
+          .map((v) => ({
+            key: v.key,
+            displayName: v.displayName,
+            gender: v.gender,
+            locale: v.locale,
+            keywords: v.keywords, // 清单里的 keywords 直接透传：系统语音名与 key 不一致时靠它匹配
+            desc: v.sourceName ? `来自音色源：${v.sourceName}` : '',
+          }));
+        const reg = registerDynamicVoices(list);
+        this._dyn = {
+          started: true,
+          ready: true,
+          registered: reg.added.length,
+          keys: reg.added.slice(),
+          ignored: reg.ignored.slice(),
+          warnings: (reg.warnings || []).map((w) => w.message),
+          error: null,
+          at: Date.now(),
+        };
+        // 已经探测过：用缓存里的枚举结果重新挑一遍，让新音色立刻出现在音色表里
+        this._refreshProbeVoices();
+      } catch (e) {
+        this._dyn = {
+          ...this._dyn,
+          started: true,
+          ready: true,
+          error: String((e && e.message) || e),
+          at: Date.now(),
+        };
+      }
+      return this._dyn;
+    })();
+    return this._dynLoad;
+  }
+
+  /** 源可能变了（增删音色源 / 刚装完新音色）：清空动态音色并重新载入 */
+  _rebuildDynamicVoices() {
+    this._dynGen += 1;
+    clearDynamicVoices();
+    this._dynLoad = null;
+    this._dyn = { started: true, ready: false, registered: 0, keys: [], error: null, at: null };
+    return this._startDynamicVoices();
+  }
+
+  /** 已探测过时，用已缓存的枚举结果重挑音色（不重新枚举、不影响 available 判定） */
+  _refreshProbeVoices() {
+    const p = this._probe;
+    // 只刷新「已可用」的探测结果：不可用说明枚举里根本没有可唱的语音，
+    // 动态音色注册不能把不可用改成可用（可用性永远以真实枚举结果为准）。
+    if (!p || !p.value || !p.value.available) return;
+    const names = Array.isArray(p.value.installed) ? p.value.installed : [];
+    const picked = pickSapiVoices(names);
+    if (!picked.length) return;
+    const isFallback = picked.every((v) => v.kind === 'system');
+    p.value = {
+      ...p.value,
+      kind: isFallback ? 'system' : 'nvsa',
+      voices: picked,
+      notice: isFallback ? '当前用系统内置语音：音质一般，但几乎没有延迟。装好离线语音后会自动换成晓晓/云希。' : null,
+    };
   }
 
   /**
@@ -167,10 +258,14 @@ class SapiBackend {
     return this;
   }
 
-  /** 重启长驻通道（NVSA 注册完成后必须调用，否则 SAPI 缓存的语音列表不会刷新） */
+  /**
+   * 重启长驻通道（NVSA 注册完成后必须调用，否则 SAPI 缓存的语音列表不会刷新）。
+   * 同时重建动态音色目录：音色源可能刚增删过，刚装好的新音色要靠它才进得了选择列表。
+   */
   resetHost() {
     this.invalidate();
     this._host.dispose();
+    this._rebuildDynamicVoices();
     return this;
   }
 
@@ -256,13 +351,15 @@ class SapiBackend {
     const p = this._probe;
     if (!p || !p.value.available) return [];
     const picked = p.value.voices || [];
+    // 目录（SAPI_VOICES）里已包含音色源注册的动态音色，因此这里天然会把「新装的音色」列出来；
+    // 但必须仍在 picked 里（= 系统枚举真的装了）才展示，绝不给用户一个点了没声的选项。
     return SAPI_VOICES.filter((def) => picked.some((x) => x.key === def.key)).map((def) => {
       const hit = picked.find((x) => x.key === def.key);
       return {
         id: def.id,
         engine: 'sapi',
         displayName: def.name,
-        locale: 'zh-CN',
+        locale: def.locale || 'zh-CN',
         gender: def.gender,
         desc: def.desc,
         source: 'offline',
@@ -376,6 +473,14 @@ class SapiBackend {
       message: p && !p.value.available ? p.value.message : null,
       installedCount: p && p.value.installed ? p.value.installed.length : null,
       voices: p && p.value.voices ? p.value.voices : [],
+      // 音色源注册的动态音色：ready=false 表示还在后台载入；error 非空表示载入失败（不影响本地语音可用性）
+      dynamicVoices: {
+        started: this._dyn.started,
+        ready: this._dyn.ready,
+        registered: this._dyn.registered,
+        keys: this._dyn.keys.slice(),
+        error: this._dyn.error,
+      },
       // 长驻通道被保活判定死亡后自动重建；这里留一条最近记录，便于排查「偶发降级」
       lastHostDeath: this._lastHostDeath || null,
     };

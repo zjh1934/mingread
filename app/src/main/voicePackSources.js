@@ -85,6 +85,47 @@ const VP_ERRORS = {
   VERIFY_FAILED: 'VP_VERIFY_FAILED', // 装配后枚举/试合成不通过
 };
 
+/**
+ * 内置默认源的清单（W-VOICESRC）。
+ *
+ * 作用：把「硬编码 pin」表达成用户可见的同一套 manifest 结构，设置面板据此展示
+ * 「内置源里有晓晓 / 云希」；voiceDeploy 也从这里取安装目标（files 列表），
+ * 从而做到「安装目标来自清单」而不是散落的常量。
+ *
+ * 硬性约束：本函数产出的 voices 必须与下面 VOICE_PACKS **逐字段等价**
+ * （key/displayName/fileName/sizeBytes/urls 顺序），否则内置源的安装结果
+ * 就不等于改造前的三件套 —— 这是回归红线，改前先看 tmp_probe_WVOICESRC.js。
+ *
+ * `urls` 是 `url` 的镜像扩展（可选，数组）：第一个是主地址，其余为镜像。
+ * 用户自建仓库同样可以用它写多个镜像；只有一个地址时写 `url` 即可。
+ */
+function defaultManifest() {
+  return {
+    schemaVersion: 1,
+    name: '朗读女 Neo 内置音色源',
+    voices: VOICE_PACKS.map((p) => ({
+      key: p.id,
+      displayName: p.displayName,
+      gender: p.id === 'yunxi' ? 'male' : 'female',
+      locale: 'zh-CN',
+      engine: 'nvsa-sapi',
+      requires: ['nvsa'],
+      keywords: [p.id, p.displayName],
+      files: [
+        {
+          url: p.urls[0],
+          urls: p.urls.slice(),
+          fileName: p.fileName,
+          sizeBytes: p.sizeBytes,
+        },
+      ],
+      license: p.license,
+      homepage: p.mirrorPages && p.mirrorPages[0],
+      version: p.msixVersion,
+    })),
+  };
+}
+
 /** 需要下载的全部资产（顺序即下载顺序；总字节用于整体进度） */
 function downloadTargets() {
   return [
@@ -115,4 +156,5 @@ module.exports = {
   VP_ERRORS,
   downloadTargets,
   TOTAL_BYTES,
+  defaultManifest,
 };
