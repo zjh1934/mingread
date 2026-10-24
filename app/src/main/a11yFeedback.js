@@ -123,6 +123,30 @@ const AUDIO_PAGE = `<!doctype html><html><head><meta charset="utf-8"></head><bod
     });
   };
 
+  // v2.4.0 延迟度量专用：与 __playSpeech 同样的播法，但**音频真正开始的那一刻**就 resolve
+  // 相对延迟，不等播完。__playSpeech 留给业务逻辑（它要等 ended 才返回时长），两者互不影响。
+  // 返回 { startDelayMs, durationMs }：startDelayMs = 进入函数 → 排音完成（≈ 首声时刻）。
+  window.__playSpeechTimed = function (b64, mime) {
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
+    var c = ac();
+    return c.decodeAudioData(bytes.buffer).then(function (buf) {
+      return new Promise(function (resolve) {
+        window.__stopSpeech();
+        src = c.createBufferSource();
+        src.buffer = buf;
+        src.connect(c.destination);
+        var ms = Math.round(buf.duration * 1000);
+        src.onended = function () { src = null; };
+        src.start();
+        var now = (window.performance && performance.now) ? performance.now() : Date.now();
+        resolve({ startDelayMs: Math.round(now - t0), durationMs: ms });
+      });
+    });
+  };
+
   // TTS 不可用时的最后兜底：浏览器内置语音合成。
   // Linux 上 Chromium 没有装语音后端时 getVoices() 是空的，此时 speak() 不出声，
   // 必须如实返回失败，不能让上层以为播报成功了（基线铁律：不要静默失败）。

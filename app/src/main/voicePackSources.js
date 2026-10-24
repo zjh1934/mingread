@@ -23,6 +23,13 @@ const NVSA = {
     fileName: 'NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip',
     sizeBytes: 22999239,
     urls: [
+      // 镜像优先：国内网络下 github.com 主页与 release 资产常直接不可达
+      //（本机实测：github.com http=000、api 可取列表但资产下载超时）。
+      // 两个镜像实测均支持 Range（206），可断点续传；字节数校验兜底，
+      // 内容不对（含镜像投毒）会在 sizeBytes 校验阶段被拦下，不会进入解压/注册。
+      'https://ghfast.top/https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip',
+      'https://gh-proxy.com/https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip',
+      // 官方直链放最后：能直连的环境仍优先走官方
       'https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip',
     ],
   },

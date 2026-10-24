@@ -78,7 +78,13 @@ const CODE_TO_STATE = {
 const PS = process.env.LDN_SAPI_PS || 'powershell.exe';
 const REG_KEY_PS = 'HKCU:\\Software\\NaturalVoiceSAPIAdapter\\Enumerator';
 const MARKER = '.registered';
-const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 历史常量（保留兼容），实际以 stall/total 为准
+// 慢网实战修正（本机实测：镜像 102KB/s、语音包源 55KB/s）：
+//   原来的实现是「5 分钟总超时 + 每次重试 rmSync 从头下」，于是 56MB 语音包必然超时失败，
+//   永远装不上。改为两个正交的超时：① 连续 45s 没有任何字节进来才算断流（stall）；
+//   ② 单文件总时限 60 分钟，仅用于防永久挂起。配合断点续传（Range），慢网也能装完。
+const DOWNLOAD_STALL_MS = 45 * 1000;
+const DOWNLOAD_TOTAL_MS = 60 * 60 * 1000;
 const DOWNLOAD_ROUNDS = 2; // 每个 URL 最多试 2 轮（瞬时断流可自愈）
 const DEFAULT_NEXT_STEP = '在线语音可以继续使用；稍后点「重试」会从断点继续，已下载的部分不会重下。';
 
@@ -692,28 +698,52 @@ class VoiceDeploy {
 
   async _fetchTo(url, target, dest, onBytes) {
     const tmp = `${dest}.part`;
+    // ---- 断点续传：保留 .part，下次带 Range 接着下（本机慢网下这是「能不能装上」的分水岭）----
+    let resumeFrom = 0;
     try {
-      fs.rmSync(tmp, { force: true });
+      const st = fs.statSync(tmp);
+      if (target.sizeBytes && st.size === target.sizeBytes) {
+        // .part 已是完整文件（上次 rename 前中断）：直接转正，不再下载
+        fs.rmSync(dest, { force: true });
+        fs.renameSync(tmp, dest);
+        if (onBytes) onBytes(target.sizeBytes, target.sizeBytes);
+        return;
+      }
+      if (st.size > 0 && (!target.sizeBytes || st.size < target.sizeBytes)) resumeFrom = st.size;
     } catch (e) {
-      /* 忽略 */
+      resumeFrom = 0;
     }
+
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), DOWNLOAD_TIMEOUT_MS);
+    // 两个正交超时：stall 判「断流」，total 只防永久挂起
+    let stallTimer = null;
+    const armStall = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => ctrl.abort(), DOWNLOAD_STALL_MS);
+    };
+    const totalTimer = setTimeout(() => ctrl.abort(), DOWNLOAD_TOTAL_MS);
+    armStall();
+
     let ws = null;
     try {
-      const res = await this._fetch(url, {
-        signal: ctrl.signal,
-        redirect: 'follow',
-        headers: { 'User-Agent': 'langdu-nv-neo/2.4 (+https://github.com/zjh1934/langdu-nv)' },
-      });
+      const headers = { 'User-Agent': 'langdu-nv-neo/2.4 (+https://github.com/zjh1934/langdu-nv)' };
+      if (resumeFrom > 0) headers.Range = `bytes=${resumeFrom}-`;
+      const res = await this._fetch(url, { signal: ctrl.signal, redirect: 'follow', headers });
       if (!res || !res.ok) throw new Error(`HTTP ${(res && res.status) || '无响应'}`);
       if (!res.body) throw new Error('响应体为空');
-      const total = Number(res.headers.get('content-length') || 0) || target.sizeBytes || 0;
 
-      ws = fs.createWriteStream(tmp);
-      let received = 0;
+      // 206 = 服务器接受续传（追加写）；200 = 不支持续传或首次下载（覆盖写）
+      const append = resumeFrom > 0 && res.status === 206;
+      if (resumeFrom > 0 && !append) resumeFrom = 0;
+
+      const remain = Number(res.headers.get('content-length') || 0) || 0;
+      const total = remain + resumeFrom || target.sizeBytes || 0;
+
+      ws = fs.createWriteStream(tmp, { flags: append ? 'a' : 'w' });
+      let received = resumeFrom;
       const overLimit = target.sizeBytes ? target.sizeBytes * 1.05 + 1024 : Number.MAX_SAFE_INTEGER;
       for await (const chunk of res.body) {
+        armStall(); // 有字节进来就重置断流计时
         const buf = Buffer.from(chunk);
         received += buf.length;
         if (received > overLimit) throw new Error('服务器返回的数据大于预期大小，已中止');
@@ -727,7 +757,10 @@ class VoiceDeploy {
       ws = null;
 
       if (target.sizeBytes > 0 && received !== target.sizeBytes) {
-        throw new Error(`文件大小不符：期望 ${target.sizeBytes} 字节，实际 ${received} 字节`);
+        // 保留 .part：下一轮 / 下次点「重试」可以接着下，不必从头
+        throw new Error(
+          `文件大小不符：期望 ${target.sizeBytes} 字节，实际 ${received} 字节（已保留断点，重试将续传）`
+        );
       }
       fs.rmSync(dest, { force: true });
       fs.renameSync(tmp, dest);
@@ -737,14 +770,19 @@ class VoiceDeploy {
       } catch (e2) {
         /* 忽略 */
       }
-      try {
-        fs.rmSync(tmp, { force: true });
-      } catch (e2) {
-        /* 忽略 */
+      // 关键：**不删 .part**。慢网一次下不完是常态，删掉就等于永远从头开始。
+      // 只有「服务器返回的数据超预期」这种脏数据才丢弃，避免续传把错误内容拼进来。
+      if (/大于预期大小/.test(String(e && e.message))) {
+        try {
+          fs.rmSync(tmp, { force: true });
+        } catch (e2) {
+          /* 忽略 */
+        }
       }
       throw e;
     } finally {
-      clearTimeout(timer);
+      clearTimeout(totalTimer);
+      if (stallTimer) clearTimeout(stallTimer);
     }
   }
 

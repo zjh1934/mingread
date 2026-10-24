@@ -36,7 +36,12 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # ---- 资源直链（与 src 侧 voicePackSources 保持一致；pin 到实测可用的「最后可用版本」）----
-$NVSA_ZIP_URL = 'https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip'
+# 国内网络下 github.com 主页与 release 资产常直接不可达（本机实测：主页 http=000、
+# 资产下载超时，而 api.github.com 与镜像可用）。故默认走镜像，顺序与
+# src/main/voicePackSources.js 的 urls 一致；镜像失效时把 $NVSA_ZIP_URL 换回官方直链即可
+# —— 字节数校验（22999239）会拦住任何内容不符的下载，不会装进错东西。
+$NVSA_ZIP_URL_OFFICIAL = 'https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip'
+$NVSA_ZIP_URL = 'https://ghfast.top/https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases/download/v0.2.10/NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip'
 $NVSA_ZIP_NAME = 'NaturalVoiceSAPIAdapter_v0.2.10_x86_x64.zip'
 $NVSA_ZIP_BYTES = 22999239
 $NVSA_DLL_REL = 'x64\NaturalVoiceSAPIAdapter.dll'

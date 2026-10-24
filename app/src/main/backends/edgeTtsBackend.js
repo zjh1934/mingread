@@ -253,7 +253,8 @@ class EdgeTtsBackend {
       }
     } catch (e) {
       const err = new Error(
-        `在线合成失败：${e && e.message ? e.message : e}。请检查网络后重试（本软件只有在线语音一种方案）。`
+        `在线合成失败：${e && e.message ? e.message : e}。请检查网络后重试` +
+          `（设置里点「一键安装离线语音」后，没网也能朗读，且没有网络延迟）。`
       );
       err.code = C.ERR.EDGE_NETWORK;
       err.cause = e;
