@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>LensZoom-Content</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #ffffff; color: #111827; overflow: hidden; }
+  #bar { height: 44px; background: #1e40af; color: #ffffff; display: flex; align-items: center; padding: 0 14px; font-size: 18px; font-weight: 700; }
+  #body { padding: 16px 22px; }
+  h1 { font-size: 34px; margin: 0 0 10px; letter-spacing: 1px; }
+  p.lead { font-size: 15px; line-height: 1.7; margin: 0 0 12px; max-width: 660px; }
+  p.fine { font-size: 10px; color: #4b5563; margin: 0 0 14px; }
+  .row { display: flex; gap: 10px; align-items: center; margin: 0 0 14px; }
+  button { font-size: 16px; padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; }
+  #btnPlay { background: #2563eb; color: #ffffff; }
+  #btnPause, #btnSet { background: #e5e7eb; color: #111827; }
+  input { font-size: 16px; padding: 8px 10px; width: 300px; border: 2px solid #64748b; border-radius: 6px; }
+  .grid { display: flex; gap: 22px; align-items: flex-start; }
+  .cb { display: grid; grid-template-columns: repeat(8, 14px); grid-auto-rows: 14px; border: 1px solid #000; }
+  .cb i { background: #000; }
+  .cb i.w { background: #fff; }
+  .lines { width: 130px; padding-top: 4px; }
+  .lines div { height: 2px; background: #000; margin-bottom: 5px; }
+  .lines div.thin { height: 1px; }
+  .swatches { display: flex; gap: 6px; padding-top: 4px; }
+  .sw { width: 28px; height: 28px; border: 1px solid #333; }
+</style>
+</head>
+<body>
+  <div id="bar">朗读女 Neo · LensZoom 实跑验证（屏幕缩放测试内容）</div>
+  <div id="body">
+    <h1>屏幕缩放测试 — 低视力用户</h1>
+    <p class="lead">这是用于验证 LensZoom 的测试内容。放大 8 倍后，这段 15px 的文字应该清晰可读：屏幕缩放是低视力用户看清内容的主要手段，锐化与描边让文字边缘更清楚。</p>
+    <p class="fine">10px 小字：细体提示文本 —— 放大后检查锯齿与清晰度。ABCDEFGHIJKLM abcdefghijklmn 0123456789</p>
+    <div class="row">
+      <button id="btnPlay">▶ 开始朗读</button>
+      <button id="btnPause">⏸ 暂停</button>
+      <button id="btnSet">⚙ 设置</button>
+      <span id="clickInfo" style="font-size: 14px;">点击次数：0</span>
+    </div>
+    <div class="row">
+      <input id="txt" placeholder="放大后也可以直接点击输入…" />
+    </div>
+    <div class="grid">
+      <div class="cb" id="cb"></div>
+      <div class="lines"><div></div><div class="thin"></div><div></div><div class="thin"></div><div></div><div class="thin"></div></div>
+      <div class="swatches">
+        <div class="sw" style="background:#ef4444"></div>
+        <div class="sw" style="background:#22c55e"></div>
+        <div class="sw" style="background:#3b82f6"></div>
+        <div class="sw" style="background:#facc15"></div>
+        <div class="sw" style="background:#000000"></div>
+      </div>
+    </div>
+  </div>
+<script>
+  var cb = document.getElementById('cb');
+  for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
+    var i = document.createElement('i');
+    if ((r + c) % 2 === 0) i.className = 'w';
+    cb.appendChild(i);
+  }
+  var clicks = 0;
+  function bump() { clicks++; document.getElementById('clickInfo').textContent = '点击次数：' + clicks; }
+  document.getElementById('btnPlay').onclick = bump;
+  document.getElementById('btnPause').onclick = bump;
+  document.getElementById('btnSet').onclick = bump;
+</script>
+</body>
+</html>

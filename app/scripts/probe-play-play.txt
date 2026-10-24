@@ -1,0 +1,35 @@
+settings.json=/tmp/ldnqa26-sMpOtS/settings.json fontScale=1 theme=light
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Pol
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Pol
+mounted=true
+editor open=true setText=true textareaLen=108 bufMode=false
+click-start=true
+SHOT qa-v26-play-s1.png 1180x772
+EVID s1 status="播放中第 1 / 10 句" curIdx=0/10 font=24px scale=1 prog=0/35760 time=0:00~0:35 active=null bg=null listScroll=- snack={"text":"本地语音不可用，当前使用在线语音","rect":[428,698,325,46]} overlapList=- overlapActive=- playBtn=暂停 72x72 overflowX=0 pageScroll=0 docH=772/772
+SHOT qa-v26-play-s1-list.png 1180x772
+EVID s1-list status="播放中第 1 / 10 句" curIdx=0/10 font=24px scale=1 prog=735.291/35760 time=0:00~0:35 active=第 1 句，共 10 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":62,"sh":62} snack=none overlapList=- overlapActive=- playBtn=暂停 72x72 overflowX=0 pageScroll=0 docH=772/772
+main settings: fontScale=1
+window[朗读女 Neo 悬浮球] 56x56 visible=true
+window[LangduNvNeo] 120x80 visible=false
+window[朗读女 Neo · 选中文字按 F1 即读] 1180x800 visible=true
+SHOT qa-v26-play-mid.png 1180x772
+EVID mid status="播放中第 5 / 10 句" curIdx=4/10 font=24px scale=1 prog=14088/34582 time=0:14~0:34 active=第 5 句，共 10 句 bg=rgba(107, 91, 255, 0.74) listScroll={"top":0,"h":62,"sh":62} snack=none overlapList=- overlapActive=- playBtn=暂停 72x72 overflowX=0 pageScroll=0 docH=772/772
+NOTE prev 未回到第 4 句（句内 >1.2s 时重播本句，属预期行为）
+SHOT qa-v26-play-snack-overlap.png 1180x772
+EVID snack-overlap status="已暂停第 6 / 10 句定时关闭已开启" curIdx=5/10 font=24px scale=1 prog=17088/34582 time=0:17~0:34 active=第 6 句，共 10 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":62,"sh":62} snack={"text":"已设置 10 分钟后自动停止","rect":[447,695,286,54]} overlapList=[286,0] overlapActive=[0,0] playBtn=播放 72x72 overflowX=0 pageScroll=0 docH=772/772
+SHOT qa-v26-play-timer.png 1180x772
+EVID timer status="已暂停第 6 / 10 句定时关闭已开启" curIdx=5/10 font=24px scale=1 prog=17088/34582 time=0:17~0:34 active=第 6 句，共 10 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":62,"sh":62} snack={"text":"已设置 10 分钟后自动停止","rect":[447,695,286,54]} overlapList=[286,0] overlapActive=[0,0] playBtn=播放 72x72 overflowX=0 pageScroll=0 docH=772/772
+EVID mid-advance dt=2002ms prog1=14088 prog2=17088 time1=0:14 time2=0:17 listScroll={"top":0,"h":62,"sh":62}
+SHOT qa-v26-play-paused.png 1180x772
+EVID paused status="已暂停第 6 / 10 句定时关闭已开启" curIdx=5/10 font=24px scale=1 prog=17088/34582 time=0:17~0:34 active=第 6 句，共 10 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":62,"sh":62} snack={"text":"已设置 10 分钟后自动停止","rect":[447,695,286,54]} overlapList=[286,0] overlapActive=[0,0] playBtn=播放 72x72 overflowX=0 pageScroll=0 docH=772/772
+EVID pause-freeze prog1=17088 prog2=17088 time1=0:17 time2=0:17 curIdx=5->5 playBtn=播放 72x72
+SHOT qa-v26-play-resumed.png 1180x772
+EVID resumed status="播放中第 6 / 10 句定时关闭已开启" curIdx=5/10 font=24px scale=1 prog=17088/34582 time=0:17~0:34 active=第 6 句，共 10 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":62,"sh":62} snack=none overlapList=- overlapActive=- playBtn=暂停 72x72 overflowX=0 pageScroll=0 docH=772/772
+click-stop=true at=2026-10-24T06:32:05.146Z
+STOP_DIAG#0 status="待开始" curIdx=-1 playing=false paused=false idle=true playBtn=none startBtn=present
+SHOT qa-v26-play-stopped.png 1180x772
+EVID stopped status="待开始" curIdx=-1/0 font=undefinedpx scale=1 prog=0/1 time=0:00~0:00 active=null bg=null listScroll=- snack=none overlapList=- overlapActive=- playBtn=none overflowX=0 pageScroll=0 docH=772/772
+EVID stopped-detail curFont=undefined prog=0/1 time=0:00~0:00 listCount=0 playBtn=none startBtn=present

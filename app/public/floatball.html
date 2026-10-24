@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>朗读女 Neo 悬浮球</title>
+<style>
+  /* α-视觉增强：球体尺寸由 --ball 驱动（56 / 80 / 112 三档），
+     图标、角标、右键菜单字号全部按同一变量派生，改档位只改一个数。 */
+  html {
+    --ball: 56px;
+  }
+  /* 透明窗口：页面即球本体，无任何外部资源依赖 */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: var(--ball);
+    height: var(--ball);
+    overflow: hidden;
+    background: transparent;
+  }
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+  #ball {
+    position: relative;
+    width: var(--ball);
+    height: var(--ball);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 默认 = st-idle 灰蓝 */
+    background: linear-gradient(160deg, #9aa3b2 0%, #6e7889 100%);
+    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: filter 0.15s ease, transform 0.08s ease;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  #ball:hover {
+    filter: brightness(1.12);
+  }
+  #ball:active {
+    transform: scale(0.94);
+  }
+  /* st-playing：品牌色 + 轻微呼吸（光环脉冲，不占用 transform 以免影响按压反馈） */
+  #ball.st-playing {
+    background: linear-gradient(160deg, #8f83ff 0%, #6b5bff 100%);
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+  /* st-buffering：橙色 */
+  #ball.st-buffering {
+    background: linear-gradient(160deg, #ffb35c 0%, #f28c28 100%);
+  }
+  /* st-conflict：红色 + 角标（hotkeyOk===false 时优先于播放状态） */
+  #ball.st-conflict {
+    background: linear-gradient(160deg, #f26d74 0%, #d9344a 100%);
+  }
+  @keyframes breathe {
+    0%, 100% {
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), 0 0 0 0 rgba(107, 91, 255, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+    50% {
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.28), 0 0 0 7px rgba(107, 91, 255, 0),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+  }
+  #ball svg {
+    width: calc(var(--ball) * 0.42);
+    height: calc(var(--ball) * 0.42);
+    fill: #ffffff;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+    pointer-events: none;
+  }
+  .icon-pause {
+    display: none;
+  }
+  #ball.st-playing .icon-speaker {
+    display: none;
+  }
+  #ball.st-playing .icon-pause {
+    display: block;
+  }
+  #badge {
+    position: absolute;
+    top: calc(var(--ball) * -0.035);
+    right: calc(var(--ball) * -0.035);
+    width: calc(var(--ball) * 0.30);
+    height: calc(var(--ball) * 0.30);
+    border-radius: 50%;
+    background: #d9344a;
+    color: #ffffff;
+    font-size: calc(var(--ball) * 0.21);
+    font-weight: 700;
+    line-height: calc(var(--ball) * 0.27);
+    text-align: center;
+    border: calc(var(--ball) * 0.027) solid #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    display: none;
+    pointer-events: none;
+  }
+  #ball.st-conflict #badge {
+    display: block;
+  }
+  /* 右键自绘菜单：深色小圆角面板，风格与球体协调。
+     position:fixed 使其不受 body overflow:hidden 裁剪；
+     但球窗口本身只有球体大小，菜单超出部分仍会被窗口裁切——
+     由主进程在收到 menu 提示时临时放大球窗口（见 floatBall.js handleMenu）。 */
+  #ctx-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: calc(var(--ball) * 3.2);
+    padding: calc(var(--ball) * 0.07);
+    border-radius: calc(var(--ball) * 0.18);
+    background: rgba(30, 35, 46, 0.97);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    font-size: calc(var(--ball) * 0.22);
+    color: #e8ebf2;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #ctx-menu .ctx-item {
+    display: block;
+    width: 100%;
+    padding: calc(var(--ball) * 0.11) calc(var(--ball) * 0.18);
+    border: 0;
+    border-radius: calc(var(--ball) * 0.11);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    min-height: calc(var(--ball) * 0.62);
+  }
+  #ctx-menu .ctx-item:hover {
+    background: rgba(143, 131, 255, 0.38);
+  }
+  #ctx-menu hr {
+    margin: calc(var(--ball) * 0.07) calc(var(--ball) * 0.1);
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+</style>
+</head>
+<body>
+  <div id="ball" class="st-idle" title="朗读女 Neo · 单击朗读当前选中文字" role="button" aria-label="朗读悬浮球">
+    <!-- 待机 / 缓冲：小喇叭 -->
+    <svg class="icon-speaker" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 9v6h4l5 5V4L7 9H3z" />
+      <path d="M16 8.8a4.5 4.5 0 0 1 0 6.4" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" />
+      <path d="M18.6 6.2a8 8 0 0 1 0 11.6" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85" />
+    </svg>
+    <!-- 播放中：暂停样式（纯视觉） -->
+    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="5" width="3.6" height="14" rx="1.2" />
+      <rect x="13.4" y="5" width="3.6" height="14" rx="1.2" />
+    </svg>
+    <span id="badge">!</span>
+  </div>
+
+<script>
+  (function () {
+    'use strict';
+    var DRAG_THRESHOLD = 5; // 超过 5px 视为拖动，否则视为单击
+    var BALL_SIZES = [56, 80, 112];
+    var ball = document.getElementById('ball');
+
+    // window.langdu / floatBall 桥不存在时全部静默降级（不报错刷屏）
+    function fb() {
+      try {
+        return (window.langdu && window.langdu.floatBall) || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // ---- α：尺寸档位（56 / 80 / 112），由主进程 floatBall:state 下发 ----
+    function setSize(px) {
+      var n = Number(px);
+      if (!isFinite(n) || n <= 0) return;
+      var best = BALL_SIZES[0];
+      BALL_SIZES.forEach(function (s) {
+        if (Math.abs(s - n) < Math.abs(best - n)) best = s;
+      });
+      document.documentElement.style.setProperty('--ball', best + 'px');
+    }
+
+    // ---- 状态：由 floatBall.onState 驱动 ----
+    function applyState(s) {
+      if (!s || typeof s !== 'object') return;
+      if (s.size != null) setSize(s.size);
+      // hotkeyOk===false 时无论播放状态都优先 conflict
+      var conflict = s.hotkeyOk === false;
+      var cls = 'st-idle';
+      if (conflict) cls = 'st-conflict';
+      else if (s.buffering) cls = 'st-buffering';
+      else if (s.isPlaying) cls = 'st-playing';
+      ball.className = cls;
+      if (conflict) {
+        ball.title = '热键 ' + (s.hotkey || 'F1') + ' 被占用，请在设置中更换或关闭占用程序';
+      } else if (s.isPlaying) {
+        ball.title = '正在朗读 · 单击可重新朗读选中文字';
+      } else {
+        ball.title = '朗读女 Neo · 单击朗读当前选中文字';
+      }
+    }
+
+    try {
+      var bridge = fb();
+      if (bridge && typeof bridge.onState === 'function') bridge.onState(applyState);
+    } catch (e) {
+      /* 桥不可用时保持静态待机样式 */
+    }
+
+    // ---- 拖拽 / 单击 ----
+    var session = null;
+
+    function endSession(sendDragEnd) {
+      if (!session) return;
+      if (sendDragEnd) {
+        try {
+          var b = fb();
+          if (b && typeof b.dragEnd === 'function') b.dragEnd();
+        } catch (e) {
+          /* 忽略 */
+        }
+      }
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('mouseleave', onLeave);
+      session = null;
+    }
+
+    function onMove(e) {
+      if (!session) return;
+      var dx = e.screenX - session.x;
+      var dy = e.screenY - session.y;
+      if (!session.dragged && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        session.dragged = true;
+      }
+      if (session.dragged) {
+        e.preventDefault();
+        try {
+          var b = fb();
+          if (b && typeof b.dragMove === 'function') b.dragMove({ dx: dx, dy: dy });
+        } catch (err) {
+          /* 忽略 */
+        }
+      }
+    }
+
+    function onUp() {
+      if (!session) return;
+      var wasDragged = session.dragged;
+      endSession(wasDragged);
+      if (!wasDragged) {
+        // 单击：朗读当前选中文字
+        try {
+          var b = fb();
+          if (b && typeof b.cmd === 'function') b.cmd({ cmd: 'read' });
+        } catch (e) {
+          /* 忽略 */
+        }
+      }
+    }
+
+    // 指针移出球体窗口时结束拖拽，避免球黏在光标上
+    function onLeave() {
+      if (session) endSession(true);
+    }
+
+    ball.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return; // 仅左键
+      e.preventDefault();
+      session = { x: e.screenX, y: e.screenY, dragged: false };
+      try {
+        var b = fb();
+        if (b && typeof b.dragStart === 'function') b.dragStart();
+      } catch (err) {
+        /* 忽略 */
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('mouseleave', onLeave);
+    });
+
+    // ---- 右键自绘菜单 ----
+    // 菜单项全部走既有 floatBall.cmd；zoomIn/zoomOut/zoomExit/hide 需主进程补充处理（见报告）
+    var MENU_ITEMS = [
+      { label: '朗读选中文字', cmd: 'read' },
+      { label: '播放', cmd: 'play' },
+      { label: '暂停', cmd: 'pause' },
+      { label: '停止', cmd: 'stop' },
+      { sep: true },
+      { label: '放大一档', cmd: 'zoomIn' },
+      { label: '缩小一档', cmd: 'zoomOut' },
+      { label: '退出缩放', cmd: 'zoomExit' },
+      { sep: true },
+      { label: '隐藏悬浮球', cmd: 'hide' },
+    ];
+    var menuEl = null;
+
+    function sendCmd(cmd) {
+      try {
+        var b = fb();
+        if (b && typeof b.cmd === 'function') b.cmd({ cmd: cmd });
+      } catch (e) {
+        /* 桥不可用时静默降级 */
+      }
+    }
+
+    // 提示主进程临时放大/收回球窗口，使菜单完整可见（主进程未实现时忽略）
+    function hintMenuResize(open, w, h) {
+      try {
+        var b = fb();
+        if (b && typeof b.cmd === 'function') b.cmd({ cmd: 'menu', open: !!open, width: w, height: h });
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+
+    function onDocDown(e) {
+      if (menuEl && !menuEl.contains(e.target)) closeMenu();
+    }
+
+    function onDocKey(e) {
+      if (e.key === 'Escape') closeMenu();
+    }
+
+    function closeMenu() {
+      if (menuEl) {
+        menuEl.remove();
+        menuEl = null;
+      }
+      document.removeEventListener('mousedown', onDocDown, true);
+      document.removeEventListener('keydown', onDocKey, true);
+      window.removeEventListener('blur', closeMenu);
+      hintMenuResize(false, 0, 0);
+    }
+
+    function openMenu(x, y) {
+      closeMenu();
+      var menu = document.createElement('div');
+      menu.id = 'ctx-menu';
+      MENU_ITEMS.forEach(function (item) {
+        if (item.sep) {
+          menu.appendChild(document.createElement('hr'));
+          return;
+        }
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ctx-item';
+        btn.textContent = item.label;
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          sendCmd(item.cmd);
+          closeMenu();
+        });
+        menu.appendChild(btn);
+      });
+      document.body.appendChild(menu);
+      // 菜单实际尺寸随字号档位变化 → 量出来再告诉主进程扩窗口，避免菜单被裁切
+      var rect = menu.getBoundingClientRect();
+      var px = Math.max(4, Math.min(x, window.innerWidth - rect.width - 4));
+      var py = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4));
+      menu.style.left = px + 'px';
+      menu.style.top = py + 'px';
+      menuEl = menu;
+      document.addEventListener('mousedown', onDocDown, true);
+      document.addEventListener('keydown', onDocKey, true);
+      window.addEventListener('blur', closeMenu);
+      hintMenuResize(true, Math.ceil(rect.width), Math.ceil(rect.height));
+    }
+
+    ball.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      if (session) endSession(false); // 右键不触发拖拽会话
+      openMenu(e.clientX, e.clientY);
+    });
+  })();
+</script>
+</body>
+</html>

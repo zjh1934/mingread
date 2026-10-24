@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>zoom-overlay</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100vw; height: 100vh;
+    overflow: hidden; background: #000; cursor: default;
+    -webkit-user-select: none; user-select: none;
+  }
+  #stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
+  /* video 尺寸 = 显示器逻辑尺寸；缩放由 JS 设置 transform/origin（origin 为显示器坐标） */
+  #screen {
+    position: absolute; left: 0; top: 0;
+    transform-origin: 0 0; will-change: transform;
+    image-rendering: pixelated; /* 整数倍时保持锐利 */
+  }
+  /* 视口边框：放大态下始终可见，双色描边保证在任意底色上都能看清 */
+  #ring {
+    position: fixed; inset: 0; pointer-events: none; display: none;
+    border: 4px solid #ffff00;
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.85);
+  }
+  /* 十字线：低视力用户放大后最容易"找不到指针" */
+  #cross-v, #cross-h {
+    position: fixed; pointer-events: none; display: none; z-index: 6;
+    background: rgba(255, 255, 0, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8);
+  }
+  #cross-v { top: 0; bottom: 0; width: 2px; }
+  #cross-h { left: 0; right: 0; height: 2px; }
+  /* 焦点高亮框：套在光标周围，双色描边 + 中心留空 */
+  #focus {
+    position: fixed; pointer-events: none; display: none; z-index: 7;
+    border: 3px solid #ffff00; border-radius: 6px;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.9), inset 0 0 0 2px rgba(0, 0, 0, 0.6);
+    transform: translate(-50%, -50%);
+  }
+  #hud {
+    position: fixed; left: 12px; top: 12px; z-index: 10;
+    font: 18px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-weight: 700;
+    color: #ffffff; background: rgba(0, 0, 0, 0.82);
+    border: 2px solid #ffff00; border-radius: 10px;
+    padding: 8px 12px; display: none; white-space: pre;
+  }
+  #wait {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    align-items: center; justify-content: center;
+    color: #cbd5e1; background: rgba(2, 6, 23, 0.86);
+    font: 18px "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  #wait .spin {
+    width: 26px; height: 26px; margin-right: 12px;
+    border: 3px solid rgba(148, 163, 184, 0.4); border-top-color: #60a5fa;
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #svgdefs { position: absolute; width: 0; height: 0; overflow: hidden; }
+</style>
+</head>
+<body>
+  <div id="stage"><video id="screen" autoplay muted playsinline></video></div>
+  <div id="ring"></div>
+  <div id="cross-v"></div>
+  <div id="cross-h"></div>
+  <div id="focus"></div>
+  <div id="hud"></div>
+  <div id="wait"><span class="spin"></span><span id="waitText">正在捕获屏幕…</span></div>
+
+  <!-- 边缘增强滤镜：先锐化（feConvolveMatrix），再按形态学膨胀取轮廓并上色描边 -->
+  <svg id="svgdefs" aria-hidden="true">
+    <filter id="ldnEdge" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feConvolveMatrix id="ldnSharpen" order="3" preserveAlpha="true" divisor="1"
+        kernelMatrix="0 0 0 0 1 0 0 0 0" result="sharp" />
+      <feMorphology id="ldnDilate" in="sharp" operator="dilate" radius="0" result="dil" />
+      <feComposite in="dil" in2="sharp" operator="out" result="edge" />
+      <feFlood id="ldnFlood" flood-color="#ffff00" flood-opacity="0" result="col" />
+      <feComposite in="col" in2="edge" operator="in" result="colored" />
+      <feMerge>
+        <feMergeNode in="sharp" />
+        <feMergeNode in="colored" />
+      </feMerge>
+    </filter>
+  </svg>
+
+  <script>
+    (function () {
+      var api = window.zoomAPI;
+      var video = document.getElementById('screen');
+      var stage = document.getElementById('stage');
+      var ring = document.getElementById('ring');
+      var hud = document.getElementById('hud');
+      var wait = document.getElementById('wait');
+      var waitText = document.getElementById('waitText');
+      var crossV = document.getElementById('cross-v');
+      var crossH = document.getElementById('cross-h');
+      var focus = document.getElementById('focus');
+      var fSharpen = document.getElementById('ldnSharpen');
+      var fDilate = document.getElementById('ldnDilate');
+      var fFlood = document.getElementById('ldnFlood');
+
+      // 当前生效的几何状态（主进程每帧推送）
+      var cur = {
+        zoom: 1, originX: 0, originY: 0, width: 0, height: 0, cursorX: 0, cursorY: 0,
+        showHud: false, fps: 0, integer: true, backend: '',
+        edgeEnhance: 0, outline: 0, outlineColor: '#ffff00', contrast: 0,
+        colorMode: 'normal', crosshair: 'off', focusRing: false, hudFont: 18, exiting: false,
+        paused: false, announce: false
+      };
+      var active = false;
+      var lastFilterKey = '';
+      // α2：语音播报去重（同一倍率/同一冻结态只播一次）
+      var lastAnnounced = { zoom: 0, paused: null, exiting: false };
+
+      function fmtZoom(z) {
+        return cur.integer && Math.abs(z - Math.round(z)) < 0.01 ? String(Math.round(z)) + 'x' : z.toFixed(2) + 'x';
+      }
+
+      // α2：倍率变化语音播报。低视力用户可能看不清 HUD，用声音确认当前倍率。
+      // 无语音引擎（speechSynthesis 缺失/无声项）时静默降级，绝不影响缩放主流程。
+      function speak(text) {
+        try {
+          if (!('speechSynthesis' in window)) return;
+          var u = new SpeechSynthesisUtterance(String(text));
+          u.lang = 'zh-CN';
+          speechSynthesis.cancel(); // 连续按键不堆积，只播最新一次
+          speechSynthesis.speak(u);
+        } catch (e) { /* noop */ }
+      }
+
+      function maybeAnnounce() {
+        if (!cur.announce) return;
+        try {
+          var settled = Math.abs(cur.zoom - Math.round(cur.zoom)) < 0.01 ? Math.round(cur.zoom) : 0;
+          if (!cur.paused && cur.zoom > 1.001 && settled && settled !== lastAnnounced.zoom) {
+            lastAnnounced.zoom = settled;
+            speak('已放大到 ' + settled + ' 倍');
+          }
+          if (cur.paused !== lastAnnounced.paused) {
+            lastAnnounced.paused = cur.paused;
+            speak(cur.paused ? '画面已冻结' : '已恢复');
+          }
+          if (cur.exiting && !lastAnnounced.exiting) {
+            lastAnnounced.exiting = true;
+            speak('正在退出缩放');
+          } else if (!cur.exiting && cur.zoom > 1.001) {
+            lastAnnounced.exiting = false;
+          }
+        } catch (e) { /* noop */ }
+      }
+
+      /** 组合 CSS filter：锐化/描边走 SVG 滤镜（作用在放大后的画面上），其余走内建滤镜 */
+      function buildFilter() {
+        var parts = [];
+        // 只在确有倍率且开启增强时挂 SVG 滤镜，避免 1x 时白耗性能
+        if (cur.zoom > 1.02 && (cur.edgeEnhance > 0.01 || cur.outline > 0.01)) parts.push('url(#ldnEdge)');
+        var c = 1 + (Number(cur.contrast) || 0) * 0.9;
+        if (c > 1.001) parts.push('contrast(' + c.toFixed(3) + ')');
+        if (cur.colorMode === 'invert') parts.push('invert(1) hue-rotate(180deg)');
+        else if (cur.colorMode === 'hicontrast') parts.push('grayscale(1) contrast(1.7) brightness(1.08)');
+        return parts.length ? parts.join(' ') : 'none';
+      }
+
+      function syncFilter() {
+        var key = [cur.edgeEnhance, cur.outline, cur.outlineColor, cur.contrast, cur.colorMode, cur.zoom > 1.02].join('|');
+        if (key === lastFilterKey) return;
+        lastFilterKey = key;
+        var k = (Number(cur.edgeEnhance) || 0) * 1.2;
+        if (fSharpen) {
+          fSharpen.setAttribute('kernelMatrix',
+            '0 ' + (-k) + ' 0 ' + (-k) + ' ' + (1 + 4 * k) + ' ' + (-k) + ' 0 ' + (-k) + ' 0');
+        }
+        if (fDilate) fDilate.setAttribute('radius', String(Math.max(0, Math.min(3, (Number(cur.outline) || 0) * 3))));
+        if (fFlood) {
+          fFlood.setAttribute('flood-color', String(cur.outlineColor || '#ffff00'));
+          fFlood.setAttribute('flood-opacity', (Number(cur.outline) || 0) > 0.01 ? '1' : '0');
+        }
+        stage.style.filter = buildFilter();
+      }
+
+      function syncHelpers() {
+        var W = cur.width || window.innerWidth;
+        var H = cur.height || window.innerHeight;
+        var on = !!active && cur.zoom > 1.001;
+        // 十字线
+        var ch = String(cur.crosshair || 'off');
+        var showCross = on && ch !== 'off';
+        crossV.style.display = showCross ? 'block' : 'none';
+        crossH.style.display = showCross ? 'block' : 'none';
+        if (showCross) {
+          crossV.style.left = Math.max(0, Math.min(W - 2, cur.cursorX)) + 'px';
+          crossH.style.top = Math.max(0, Math.min(H - 2, cur.cursorY)) + 'px';
+          var op = ch === 'full' ? 0.85 : 0.5;
+          crossV.style.background = 'rgba(255,255,0,' + op + ')';
+          crossH.style.background = 'rgba(255,255,0,' + op + ')';
+        }
+        // 焦点高亮框：边长取视口短边的 12%，随倍率略微放大
+        if (on && cur.focusRing) {
+          var size = Math.round(Math.min(W, H) * 0.12);
+          focus.style.display = 'block';
+          focus.style.width = size + 'px';
+          focus.style.height = size + 'px';
+          focus.style.left = Math.max(0, Math.min(W, cur.cursorX)) + 'px';
+          focus.style.top = Math.max(0, Math.min(H, cur.cursorY)) + 'px';
+        } else {
+          focus.style.display = 'none';
+        }
+      }
+
+      function apply() {
+        if (!cur.width || !cur.height) return;
+        video.style.width = cur.width + 'px';
+        video.style.height = cur.height + 'px';
+        video.style.transform = 'scale(' + cur.zoom + ')';
+        video.style.transformOrigin = cur.originX + 'px ' + cur.originY + 'px';
+        video.style.imageRendering = cur.integer ? 'pixelated' : 'auto';
+        syncFilter();
+        syncHelpers();
+
+        if (cur.showHud) {
+          hud.style.display = 'block';
+          hud.style.fontSize = (Number(cur.hudFont) || 18) + 'px';
+          var modeTxt = cur.colorMode === 'invert' ? '反色' : (cur.colorMode === 'hicontrast' ? '高对比' : '标准');
+          hud.textContent =
+            'LensZoom ' + fmtZoom(cur.zoom) + '  ·  ' + Math.round(cur.fps || 0) + ' FPS  ·  ' + (cur.backend || '—') + '  ·  ' + modeTxt +
+            '\nCtrl+Alt+=/- 倍率 · Q 快速循环 · 方向键平移 · Ctrl+Alt+0 退出' +
+            (cur.paused ? '\n已冻结（画面定格，方向键仍可平移）' : '') +
+            (cur.exiting ? '\n正在缩回 1x…' : '');
+        } else {
+          hud.style.display = 'none';
+        }
+      }
+
+      function setActive(on) {
+        active = !!on;
+        lastAnnounced = { zoom: 0, paused: null, exiting: false }; // α2：新会话重置播报去重
+        ring.style.display = active ? 'block' : 'none';
+        if (!active) {
+          hud.style.display = 'none';
+          wait.style.display = 'none';
+          crossV.style.display = 'none';
+          crossH.style.display = 'none';
+          focus.style.display = 'none';
+        }
+      }
+
+      function startCapture(displayId) {
+        waitText.textContent = '正在捕获屏幕…';
+        wait.style.display = 'flex';
+        if (!api || !api.startCapture) {
+          waitText.textContent = '缩放预加载未就绪（zoomAPI 缺失）';
+          return;
+        }
+        api.startCapture(displayId).then(function (r) {
+          if (r && r.ok) {
+            wait.style.display = 'none';
+          } else {
+            waitText.textContent = '屏幕捕获失败：' + ((r && r.error) || '未知错误');
+            if (api.reportError) api.reportError('startCapture failed: ' + ((r && r.error) || ''));
+          }
+        }).catch(function (e) {
+          waitText.textContent = '屏幕捕获失败：' + (e && e.message ? e.message : String(e));
+        });
+      }
+
+      if (!api) {
+        // 预加载缺失时静默：主进程有兜底逻辑，不刷错误
+        return;
+      }
+
+      api.onState(function (s) {
+        cur = Object.assign({}, cur, s || {});
+        if (cur.zoom <= 1.001) setActive(false);
+        else if (s && s.zoom > 1.001 && !active) setActive(true);
+        apply();
+        maybeAnnounce();
+      });
+
+      api.onActivate(function (p) {
+        setActive(true);
+        startCapture(p && p.displayId);
+      });
+
+      api.onDisplayChanged(function (p) {
+        if (active && p && p.displayId != null) startCapture(p.displayId);
+      });
+
+      // v2.3：退出缩放 → 停流省电（窗口随后被主进程隐藏）
+      api.onDeactivate(function () {
+        setActive(false);
+        if (video.srcObject) {
+          try {
+            video.srcObject.getTracks().forEach(function (t) { t.stop(); });
+          } catch (e) { /* noop */ }
+          video.srcObject = null;
+        }
+      });
+
+      // 窗口隐藏（退出缩放）时停流省电
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden' && video.srcObject) {
+          // 不停流：隐藏即 destroy，无可见性变化；保留逻辑防未来复用
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

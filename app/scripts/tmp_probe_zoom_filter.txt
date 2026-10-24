@@ -1,0 +1,6 @@
+截图 A-全关(基线): edge=0 outline=0 contrast=0 mode=normal
+截图 B-仅对比度: edge=0 outline=0 contrast=0.5 mode=normal
+截图 C-仅锐化: edge=0.35 outline=0 contrast=0 mode=normal
+截图 D-仅描边: edge=0 outline=0.4 contrast=0 mode=normal
+截图 E-锐化+描边(默认档): edge=0.35 outline=0.4 contrast=0 mode=normal
+截图 F-反色: edge=0 outline=0 contrast=0 mode=invert

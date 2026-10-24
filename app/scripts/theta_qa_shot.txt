@@ -1,0 +1,23 @@
+app.isPackaged=true (force load dist/renderer)
+settings.json=/tmp/ldnqa-Vbpq4S/settings.json fontScale=2
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+main settings: fontScale=2 floatBallSize=112
+scrolled: 1360/4000
+captured /workspace/朗读女Neo-项目交接包-v2.3.0/deliverables/qa-v25-settings-2x-zoom-mid.png 1180x772
+dom probe: {"assets":"index-BIEqFFNk.js","scale":"2","htmlFont":"32px","hc":null,"tabCount":5,"activeTab":"缩放","sliderThumb":"56px","switchTrack":"rgb(107, 91, 255)/rgb(107, 91, 255)","historyCount":4,"historyRaw":"[{\"id\":\"s1\",\"time\":1792810401196,\"severity\":\"error\",\"source\":\"settings\",\"message\":\"朗读参数保存失败：主进程未接受该偏好\"},{\"id\":\"s2\",\"time","logRows":1,"mqContrast":false,"mqMotion":false,"motionDur":"0.25s, 0.25s, 0.25s, 0.25s","dialogOverflow":"4000/392"}

@@ -1,0 +1,5 @@
+3s 后视频状态: INNER-ERR: c.getImageData is not a function
+4x 正文截图完成
+8x 细字截图完成（增强开）
+video 直帧已保存（同时刻）
+8x 细字截图完成（增强全关，对照）

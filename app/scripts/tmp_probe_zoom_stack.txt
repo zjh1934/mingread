@@ -1,0 +1,13 @@
+== overlay 状态 ==
+isVisible=true isMinimized=false isFocused=false bounds={"x":0,"y":0,"width":2559,"height":1023}
+== X 窗口树（子窗口自上而下=从顶到底） ==
+xwininfo: Window id: 0x21f (the root window) (has no name)
+  Root window id: 0x21f (the root window) (has no name)
+  Parent window id: 0x0 (none)
+     6 children:
+     0x200005 "zoom-overlay": ("electron" "Electron")  2559x1023+0+0  +0+0
+     0x200003 "LensZoom-Content": ("electron" "Electron")  1100x760+60+50  +60+50
+     0x200004 (has no name): ()  1x1+0+0  +0+0
+     0x400003 "electron": ("electron" "Electron")  200x200+0+0  +0+0
+
+capturePage 已保存 qa-v26-zoom-stack-r3.png

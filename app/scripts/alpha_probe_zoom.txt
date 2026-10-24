@@ -1,0 +1,10 @@
+start: trigger=hotkey zoomHotkeyOk=true
+① 唤起后 450ms: active=true zoom=2.000 target=2 exiting=false fps=0
+② 放大一档后 450ms: active=true zoom=3.000 target=3 exiting=false fps=57
+③ transform: zoom=3 origin=(640,512) cursor=(640,512) display=60
+③ 视觉增强字段: edgeEnhance=0.3 outline=0.5 outlineColor=#ffff00 contrast=0.15 colorMode=invert crosshair=full focusRing=true hudFont=18 followSmoothing(设)=0.3
+③ 契约字段缺失: 无
+④ reset 后 120ms（缩回中）: active=true zoom=1.154 target=1 exiting=true fps=58
+④ reset 后 1920ms（应已退出）: active=false zoom=1.000 target=1 exiting=false fps=58
+指标 D 自检：PASS（唤起重叠 → 放大 → 跟随 → 缩回 1x 退出 + 视觉增强字段齐全）
+覆盖层截图已保存（捕获源 1279x1023）

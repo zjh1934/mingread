@@ -1,0 +1,14 @@
+PASS 21.00:1  正文 primary #ffffff / #000000
+PASS 16.83:1  次要 secondary #e6e6e6 / #000000
+PASS 10.02:1  禁用 disabled #b3b3b3 / #000000
+PASS 19.56:1  主色前景 #ffff00 / #000000
+PASS 19.56:1  主按钮文字 #000000 / #ffff00 (contained)
+PASS 16.75:1  次色前景 #00ffff / #000000
+PASS 16.47:1  成功 #7dff7d / #000000
+PASS 14.67:1  警告 #ffd400 / #000000
+PASS 8.65:1  错误 #ff8080 / #000000
+PASS 11.65:1  信息 #66ccff / #000000
+PASS 7.86:1  浅色主题次要 #4a5261 / #ffffff
+PASS 11.74:1  深色主题次要 #c3cbd9 / #0c0f16
+
+指标 B：PASS（12/12 项 ≥ 7:1）

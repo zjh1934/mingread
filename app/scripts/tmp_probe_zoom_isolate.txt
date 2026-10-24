@@ -1,0 +1,6 @@
+A 装饰开·未capturePage（复现 capture-diag 条件）: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"0.95","meanLum":"109.5"}
+B capturePage 之后: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"0.95","meanLum":"109.5"}
+C 装饰全关: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"0.96","meanLum":"185.0"}
+D 内容窗口隐藏: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"0.30","meanLum":"30.4"}
+E 内容窗口恢复（装饰仍关）: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"1.00","meanLum":"239.7"}
+F 装饰恢复开启: {"wait":"none","readyState":4,"vw":2560,"nonBlack":"1.00","meanLum":"239.4"}

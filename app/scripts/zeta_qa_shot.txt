@@ -1,0 +1,21 @@
+app.isPackaged=true (force load dist/renderer)
+settings.json=/tmp/ldnqa25-LP2bP6/settings.json fontScale=1 floatBallSize=56
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+captured /workspace/朗读女Neo-项目交接包-v2.3.0/deliverables/qa-v25-panels.png 1180x772
+layout probe: {"scale":"1","hc":null,"overflowX":0,"docH":772,"playBtn":"none","startBtn":"200x72","rateBtn":"44x44"}

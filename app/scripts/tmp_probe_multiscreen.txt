@@ -1,0 +1,4 @@
+DISPLAY=:91
+getAllDisplays count=1
+  id=60 bounds={"x":0,"y":0,"width":2560,"height":1024} primary=true
+primary id=60 bounds={"x":0,"y":0,"width":2560,"height":1024}

@@ -1,0 +1,25 @@
+overlay: found
+wait.display=none waitText="正在捕获屏幕…"
+video readyState=4 size=2560x1024 paused=false
+srcObject=true tracks=1 settings={"aspectRatio":2.5,"deviceId":"screen:396:0","frameRate":60,"height":1024,"resizeMode":"crop-and-scale","width":2560}
+非黑像素占比=0.96 gridErr=无
+视频帧字符画（.=黑 :=暗 *=中 O=亮 #=白）:
+******OO#######################O
+OOOOOOO#########################
+################################
+################################
+################################
+###OO###########################
+###O*O##########################
+O####OO#########################
+O###O*OO########################
+O###O:OOO#######################
+O###O.:OOO######################
+O###O..*OOO###O#################
+O###O...*OOO#OOO################
+O###O...:*OOOOOOOOO#############
+O###O....:OOOOOOOOOO############
+OO##O.....*OOOOOOOOOOOOOOOOO###O
+
+隐藏内容窗口后视频帧: {"nonBlackFrac":"0.30","meanLum":"30.4"}
+恢复内容窗口后视频帧: {"nonBlackFrac":"1.00","meanLum":"239.7"}

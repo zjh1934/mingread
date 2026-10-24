@@ -1,0 +1,42 @@
+appId: com.langdunv.neo
+productName: 朗读女 Neo
+copyright: Copyright © 2026 zjh1934. MIT License.
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - dist/renderer/**/*
+  - src/main/**/*
+  - src/preload/**/*
+  - src/shared/**/*
+  - package.json
+  - LICENSE
+  - README.md
+  - "!**/*.map"
+asar: true
+# 无需原生模块重建（v2.1 起不再依赖任何原生语音模块）
+npmRebuild: false
+
+# 只有图标需要放在 asar 之外
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: 朗读女 Neo
+  artifactName: 朗读女Neo-${version}-安装包.${ext}
+
+publish: null
+# 说明：v2.1 起只保留微软 Edge 在线语音（晓晓/云希），安装包不再内置任何语音模型。

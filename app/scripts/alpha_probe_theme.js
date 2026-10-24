@@ -1,0 +1,12 @@
+'use strict';
+const fs = require('fs');
+const out = [];
+const { createUnarySpacing } = require('@mui/system/spacing');
+const fn = createUnarySpacing({ spacing: (f) => `calc(8px * ${f} * var(--ldn-scale))` });
+out.push('unary fn: ' + fn(1) + ' | ' + fn(2));
+const { createTheme } = require('@mui/material/styles');
+const t = createTheme({ spacing: (f) => `calc(8px * ${f} * var(--ldn-scale))`, typography: { fontSize: 14, htmlFontSize: 16 } });
+out.push('spacing(1)=' + t.spacing(1) + ' spacing(2)=' + t.spacing(2));
+out.push('body2=' + t.typography.body2.fontSize + ' h6=' + t.typography.h6.fontSize + ' caption=' + t.typography.caption.fontSize);
+out.push('zIndex ok=' + (typeof t.zIndex.modal));
+fs.writeFileSync(__dirname + '/alpha_probe_theme.txt', out.join('\n') + '\n');

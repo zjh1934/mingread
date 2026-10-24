@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build & probe artifacts (regenerable)
+app/dist/
+
+# Logs
+*.log
+app/results/*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini

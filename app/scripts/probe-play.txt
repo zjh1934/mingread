@@ -1,0 +1,29 @@
+settings.json=/tmp/ldnqa26-azgUNT/settings.json fontScale=2 theme=light
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Pol
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Pol
+mounted=true
+editor open=true setText=true textareaLen=2901 bufMode=true
+click-start=true
+SHOT qa-v26-play-buf2x-preparing.png 1180x772
+EVID preparing status="准备中…第 1 / 7 句" curIdx=0/7 font=48px scale=2 prog=0/694800 time=0:00~11:34 active=null bg=null listScroll=- snack=none overlapList=- overlapActive=- playBtn=none overflowX=0 pageScroll=0 docH=1365/772
+SHOT qa-v26-play-buf2x-s1.png 1180x772
+EVID s1 status="播放中第 1 / 7 句" curIdx=0/7 font=48px scale=2 prog=0/1047025 time=0:00~17:27 active=null bg=null listScroll=- snack={"text":"本地语音不可用，当前使用在线语音","rect":[373,646,425,75]} overlapList=- overlapActive=- playBtn=暂停 144x144 overflowX=0 pageScroll=0 docH=1365/772
+SHOT qa-v26-play-buf2x-buffering.png 1180x772
+EVID buffering status="正在合成当前句…第 6 / 7 句" curIdx=5/7 font=48px scale=2 prog=17526.076/1072517 time=0:17~17:52 active=第 6 句，共 7 句 bg=rgba(0, 0, 0, 0) listScroll={"top":0,"h":398,"sh":4476} snack=none overlapList=- overlapActive=- playBtn=播放 144x144 overflowX=0 pageScroll=0 docH=14847/772
+SHOT qa-v26-play-buf2x-s1-long.png 1180x772
+EVID s1-long status="播放中第 6 / 7 句" curIdx=5/7 font=48px scale=2 prog=16308/1024654 time=0:16~17:04 active=第 6 句，共 7 句 bg=rgb(107, 91, 255) listScroll={"top":0,"h":398,"sh":4476} snack=none overlapList=- overlapActive=- playBtn=暂停 144x144 overflowX=0 pageScroll=0 docH=14847/772
+EVID long-cur-box {"sh":14611,"ch":430,"sw":799,"cw":799}
+STOP_BTN_DOM [{"tag":"SPAN","disabled":false,"aria":"停止","rect":[479,-540,112,112],"pe":"auto"},{"tag":"BUTTON","disabled":false,"aria":"停止","rect":[479,-540,112,112],"pe":"auto"}]
+click-stop=true at=2026-10-24T06:28:41.545Z
+main settings: fontScale=2
+window[朗读女 Neo 悬浮球] 56x56 visible=true
+window[LangduNvNeo] 120x80 visible=false
+window[朗读女 Neo · 选中文字按 F1 即读] 1180x800 visible=true
+AFTER_DOM_CLICK status="待开始" playing=false
+STATUS_MUTATIONS ["1792823321545:待开始"]
+STOP_DIAG#0 2026-10-24T06:28:43.448Z status="待开始" curIdx=-1 playing=false paused=false idle=true playBtn=none startBtn=present
+SHOT qa-v26-play-buf2x-stopped.png 1180x772
+EVID stopped status="待开始" curIdx=-1/0 font=undefinedpx scale=2 prog=0/1 time=0:00~0:00 active=null bg=null listScroll=- snack=none overlapList=- overlapActive=- playBtn=none overflowX=0 pageScroll=662 docH=1434/772

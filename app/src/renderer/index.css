@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   α-视觉增强 · 全局缩放与高对比度样式（低视力优先）
+   唯一缩放真源：:root 上的 --ldn-scale（1 / 1.25 / 1.5 / 2）
+     · html font-size = 16px × scale  ⇒ 所有 rem（MUI typography 全量）同步放大
+     · theme.spacing → calc(8px × n × scale)  ⇒ 间距同步放大
+     · 目标尺寸     → calc(px × scale)        ⇒ 按钮/滑块/输入框同步放大
+   =========================================================================== */
+:root {
+  --ldn-scale: 1;
+  --ldn-scrollbar-thumb: rgba(128, 138, 156, 0.42);
+  --ldn-scrollbar-thumb-hover: rgba(128, 138, 156, 0.62);
+  --ldn-scrollbar-size: 10px;
+  --ldn-selection-bg: rgba(107, 91, 255, 0.20);
+  --ldn-selection-fg: inherit;
+  --ldn-focus-color: #6b5bff;
+  --ldn-focus-width: 3px;
+}
+
+html {
+  /* 字号档位的总开关：一行改完全界面（指标 C） */
+  font-size: calc(16px * var(--ldn-scale));
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* 大档位下允许 #root 长高，避免整页被 100% 高度锁死而截断（指标 A） */
+#root {
+  min-height: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* 细滚动条：宽度随缩放档位放大，低视力才看得见也点得到 */
+::-webkit-scrollbar {
+  width: var(--ldn-scrollbar-size);
+  height: var(--ldn-scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ldn-scrollbar-thumb);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ldn-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+textarea::placeholder {
+  color: rgba(128, 138, 156, 0.75);
+}
+
+/* 表单控件继承全局字号，避免浏览器 13px 默认值与档位脱节 */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+   高对比度（hc）兜底：theme 已下发 CSS 变量，这里补浏览器原生控件
+   --------------------------------------------------------------------------- */
+html[data-theme-hc='1'] ::-webkit-scrollbar-thumb {
+  background: #ffffff;
+  background-clip: padding-box;
+}
+
+html[data-theme-hc='1'] ::placeholder,
+html[data-theme-hc='1'] textarea::placeholder {
+  color: #b3b3b3;
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   系统偏好联动（基线指标 B，低视力）
+   1) prefers-reduced-motion: reduce → 关闭动画/过渡（前庭敏感、易疲劳用户）
+   2) prefers-contrast: more → CSS 层先加固：焦点环加粗、原生控件边框改 currentColor
+      （不改变盒模型，不会引起布局位移）；主题级 HC 切换由 theme.js 的
+      matchMedia 监听完成（换 MUI palette 必须走 JS），两层叠加不冲突。
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ldn-focus-width: 4px; /* 焦点环加粗：找焦点不费力 */
+  }
+
+  /* 原生控件边框提亮（元素级选择器，碰不到带 class 的 MUI 样式，无冲突） */
+  input,
+  textarea,
+  select,
+  button {
+    border-color: currentColor;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: currentColor;
+    background-clip: padding-box;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   大档位防破版：1.5x / 2.0x 时放开容器裁剪与固定高度，改由页面滚动承载
+   （App.jsx 由编排者收口，这里做不依赖 React 的 CSS 兜底）
+   --------------------------------------------------------------------------- */
+html[data-font-scale='1.5'] body,
+html[data-font-scale='2'] body {
+  overflow: auto !important;
+}
+
+html[data-font-scale='1.5'] .MuiBox-root,
+html[data-font-scale='2'] .MuiBox-root {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+html[data-font-scale='1.5'] body > #root > .MuiBox-root,
+html[data-font-scale='2'] body > #root > .MuiBox-root {
+  min-height: 100vh !important;
+}
+
+/* 编辑器/列表等内部滚动区在大档位下也要能滚 */
+/* 大档位防破版：1.5x / 2.0x 时放开容器裁剪与固定高度，改由页面滚动承载
+   （App.jsx 由编排者收口，这里做不依赖 React 的 CSS 兜底）
+   注意：Dialog 的 paper 必须排除在外——MUI Dialog 靠 paper 的 maxHeight 约束 +
+   DialogContent 内部滚动来保证「标题/标签页/操作栏始终可达」；
+   一刀切 max-height:none 会让 2.0x 下的设置框涨到 4000px+、上下内容永远滚不到（指标 A）。 */
+html[data-font-scale='1.5'] .MuiPaper-root:not(.MuiDialog-paper),
+html[data-font-scale='2'] .MuiPaper-root:not(.MuiDialog-paper) {
+  max-height: none !important;
+}

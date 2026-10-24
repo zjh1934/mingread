@@ -1,0 +1,4 @@
+unary fn: calc(8px * 1 * var(--ldn-scale)) | calc(8px * 2 * var(--ldn-scale))
+spacing(1)=calc(8px * 1 * var(--ldn-scale)) spacing(2)=calc(8px * 2 * var(--ldn-scale))
+body2=0.875rem h6=1.25rem caption=0.75rem
+zIndex ok=number

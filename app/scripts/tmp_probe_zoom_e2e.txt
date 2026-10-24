@@ -1,0 +1,66 @@
+== 环境 ==
+DISPLAY=:91
+屏幕: [{"id":60,"x":0,"y":0,"width":2560,"height":1024}]
+  [截图] qa-v26-zoom-content.png (1100x732)
+内容窗口已就绪（标题/正文/按钮/输入框/棋盘格/细线/色块）
+控制器启动: trigger=hotkey zoomHotkeyOk=true
+
+== ① 唤起（真热键 Ctrl+Alt+=） ==
+  热键生效，active=true（50ms 内）
+  overlay 窗口: 找到
+  状态: active=true zoom=2.00 target=2 fps=0
+  [截图] qa-v26-zoom-2x.png (2559x1023)
+
+== ② 倍率快速循环（真热键 Ctrl+Alt+Q） ==
+  Q 第一次: target=4 zoom=4.00
+  [截图] qa-v26-zoom-4x.png (2559x1023)
+  Q 第二次: target=8 zoom=8.00 平均FPS≈55
+  [截图] qa-v26-zoom-8x.png (2559x1023)
+
+== ③ 跟随（fixed 模式，xdotool 移动真鼠标） ==
+  移到(300,300): 稳定耗时 133ms | scale(8) @ 300px 300px
+  [截图] qa-v26-zoom-follow-a.png (2559x1023)
+  移到(1000,600): 稳定耗时 132ms | scale(8) @ 1000px 600px
+  [截图] qa-v26-zoom-follow-b.png (2559x1023)
+  fixed 不变点校验: cursor=(1000,600) origin=(1000,600)（应相等）
+  平滑跟随(0.6): 移动后60ms=scale(8) @ 401.418px 400.473px → 510ms=scale(8) @ 400px 400px（应逐渐逼近，非瞬移）
+
+== ④ 平移（真热键 Ctrl+Alt+方向键） ==
+  panX=160（8x 下半视口=2560/8/2=160）
+  平移前: scale(8) @ 700px 500px
+  平移后: scale(8) @ 860px 500px
+  [截图] qa-v26-zoom-pan-right.png (2559x1023)
+  Left×6 后: panX=-800 | scale(8) @ 0px 500px
+  Left×20 钳制后: panX=-4000 | scale(8) @ 0px 500px（origin 应=0 无 NaN）
+
+== ⑤ paused 冻结 ==
+  togglePause -> paused=true; HUD: block:LensZoom 8x  ·  49 FPS  ·  none  ·  标准 | Ctrl+Alt+=/- 倍率 · Q 快速循环 · 方向键平移 · Ctrl+Alt+0 退出 | 已冻结（画面定格，方向键仍可平移）
+  冻结中移动鼠标: 画面1=scale(8) @ 0px 450px
+  冻结中画面2(250ms后): scale(8) @ 0px 450px（应与画面1完全一致=真冻结）
+  冻结不变校验: PASS（定格）
+  [截图] qa-v26-zoom-paused.png (2559x1023)
+  冻结中平移: scale(8) @ 0px 450px（应已移动）
+  恢复后移动鼠标: 133ms 稳定 | scale(8) @ 0px 500px（应恢复跟随）
+
+== ⑥ 放大态可操作性（zoomClickThrough=true） ==
+  8x 放大态点击「开始朗读」按钮@(142,328) -> 点击次数：1（非 0 = 点击穿透生效，放大态可操作）
+  放大态输入: 内容窗口焦点=true 输入框值="LensZoomOK"（LensZoomOK = 放大态可输入）
+
+== ⑦ 色彩模式 ==
+  [截图] qa-v26-zoom-8x-invert.png (2559x1023)
+  反色截图完成
+  [截图] qa-v26-zoom-8x-hicontrast.png (2559x1023)
+  高对比灰度截图完成
+
+== ⑧ 缩回 1x 自动退出（真热键 Ctrl+Alt+0） ==
+  退出中: exiting=true zoom=1.07 target=1
+  缩回 1x 完成: active=false zoom=1.00 全程 316ms（平滑退出）
+  残留窗口检查: 窗口数=2（应=1 仅内容窗口）overlay.isVisible()=false
+  [截图] qa-v26-zoom-exited.png (1100x732)
+  退出后桌面截图完成（应无 overlay 残留）
+
+== ⑨ 语音播报（speechSynthesis） ==
+  overlay speechSynthesis: {"has":true,"voices":0}（沙箱无语音引擎时 voices=0，代码静默降级；真机 Windows 走 SAPI）
+
+== 探针结束 ==
+截图清单: qa-v26-zoom-content.png, qa-v26-zoom-2x.png, qa-v26-zoom-4x.png, qa-v26-zoom-8x.png, qa-v26-zoom-follow-a.png, qa-v26-zoom-follow-b.png, qa-v26-zoom-pan-right.png, qa-v26-zoom-paused.png, qa-v26-zoom-8x-invert.png, qa-v26-zoom-8x-hicontrast.png, qa-v26-zoom-exited.png

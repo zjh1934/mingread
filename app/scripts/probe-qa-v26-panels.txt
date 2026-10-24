@@ -1,0 +1,55 @@
+app.isPackaged=true (force load dist/renderer)
+settings.json=/tmp/ldnqa26-P1LbVO/settings.json fontScale=2 theme=light
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+--- step0 main baseline
+main probe: {"scale":"2","hc":null,"overflowX":0,"viewport":"1180x772","topbar":{"h":93,"overflow":[],"clippedText":[]}}
+captured qa-v26-panel-2x-main.png 1180x772
+--- step1 start playback for sentences
+realClick[开始朗读] at (515,387) size 400x144
+click 开始朗读: true
+sentences populated: true
+--- step2 sentence list expanded
+realClick[句列表] at (320,387) size 274x64
+click 句列表: true
+sentences probe: {"rect":{"l":183,"t":431,"r":987,"b":725,"w":804,"h":294},"viewport":{"w":1180,"h":772},"withinViewport":true,"internalScroll":false,"scrollH":292,"clientH":292,"rowCount":3,"firstRow":{"w":782,"h":88,"fs":"28px"}}
+captured qa-v26-panel-2x-sentences.png 1180x772
+realClick[句列表-collapse] at (320,387) size 274x64
+--- step3 voice popover
+realClick[voice] at (287,387) size 234x88
+voice probe: {"rect":{"l":165,"t":132,"r":805,"b":756,"w":640,"h":624},"viewport":{"w":1180,"h":772},"withinViewport":true,"clipped":[],"buttonCount":2,"buttonSizes":["试听:128x88","试听:128x88"]}
+voice focusAfterOpen: DIV "音色晓晓（沙箱验证音色）女声 · espeak-" 640x624
+captured qa-v26-panel-2x-voice.png 1180x772
+voice escapeClosed: true | focusAfterEscape: BUTTON "音色 · 晓晓" 234x88
+captured qa-v26-panel-2x-voice-after-esc.png 1180x772
+--- step4 timer popover
+realClick[timer] at (702,387) size 88x88
+timer probe: {"rect":{"l":181,"t":350,"r":741,"b":756,"w":560,"h":406},"viewport":{"w":1180,"h":772},"withinViewport":true,"clipped":[],"buttonCount":1,"buttonSizes":["开始:108x72"]}
+timer focusAfterOpen: DIV "定时关闭到点自动暂停，适合睡前听书。10 分钟2" 560x406
+captured qa-v26-panel-2x-timer.png 1180x772
+timer escapeClosed: true | focusAfterEscape: BUTTON "定时关闭" 88x88
+captured qa-v26-panel-2x-timer-after-esc.png 1180x772
+--- step5 tuning popover
+realClick[tuning] at (806,387) size 88x88
+tuning probe: {"rect":{"l":173,"t":280,"r":845,"b":756,"w":672,"h":476},"viewport":{"w":1180,"h":772},"withinViewport":true,"clipped":[],"buttonCount":1,"buttonSizes":["恢复默认参数:72x72"]}
+tuning focusAfterOpen: DIV "朗读参数语速0%0语调0Hz0音量0%0" 672x476
+captured qa-v26-panel-2x-tuning.png 1180x772
+tuning escapeClosed: true | focusAfterEscape: BUTTON "更多朗读参数" 88x88
+captured qa-v26-panel-2x-tuning-after-esc.png 1180x772
+captured qa-v26-panel-2x-final.png 1180x772
+--- done

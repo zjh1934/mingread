@@ -1,0 +1,25 @@
+app.isPackaged=true (force load dist/renderer)
+settings.json=/tmp/ldnqa-DszabB/settings.json fontScale=1 floatBallSize=56
+window created 1180x800
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+[console:2] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (node:electron/js2c/renderer_init:2)
+saveSystemSettings(2/112): true
+captured /workspace/朗读女Neo-项目交接包-v2.3.0/deliverables/qa-v24-ball-112.png 1180x772
+dom probe: {"scale":"2","htmlFont":"32px","dataAttr":"2","hc":null,"root":1,"btn":"72px","sys":"has"}
+systemSettings: {"hotkey":"F1","clipboardAuto":false,"floatBallEnabled":true,"hotkeyOk":true,"fontScale":2,"floatBallSize":112}
+ball bounds after toggle: 112x112
+captured qa-v24-ball-112.png
