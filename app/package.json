@@ -23,6 +23,7 @@
     "selfcheck": "python scripts/selfcheck_all.py"
   },
   "dependencies": {
+    "koffi": "^3.3.3",
     "node-edge-tts": "1.2.11"
   },
   "devDependencies": {

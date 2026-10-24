@@ -110,8 +110,34 @@ function readNvsaConfig() {
 
 class SapiBackend {
   constructor(opts = {}) {
-    this._host = opts.host || new SapiHost();
     this._probe = null; // { at, value }
+    this._host =
+      opts.host ||
+      new SapiHost({
+        // 保活连续失败（通道卡死/被杀）：失效缓存，并在后台重探 + 预热。
+        // 这里绝不 await 到任何朗读路径上——onDead 只由 sapiHost 的 60s 定时器触发。
+        onDead: (err) => this._onHostDead(err),
+      });
+  }
+
+  /**
+   * 长驻通道被判定死亡后的自愈：置空缓存 → 后台 probe(true)（会重新拉起宿主）→ 预热。
+   * 失败也不抛：下一次真实合成会再探一次，最坏情况只是这一次降级到在线语音。
+   */
+  _onHostDead(err) {
+    this.invalidate();
+    setImmediate(async () => {
+      try {
+        const p = await this.probe(true);
+        if (p && p.available && typeof this.warmup === 'function') this.warmup();
+      } catch (e) {
+        /* 自愈失败不影响后续按需重建 */
+      }
+      if (err && err.message) {
+        // 仅用于诊断：不打断朗读，也不弹提示
+        this._lastHostDeath = { message: err.message, at: Date.now() };
+      }
+    });
   }
 
   get id() {
@@ -191,7 +217,7 @@ class SapiBackend {
       return {
         available: false,
         reason: LOCAL_REASON.VOICE_NOT_REGISTERED,
-        message: `${LOCAL_REASON_TEXT[LOCAL_REASON.VOICE_NOT_REGISTERED]}（系统语音共 ${names.length} 个，未见到晓晓/云希）。请运行 scripts/register-nvsa.ps1 一键注册。`,
+        message: `${LOCAL_REASON_TEXT[LOCAL_REASON.VOICE_NOT_REGISTERED]}（系统语音共 ${names.length} 个，未见到晓晓/云希）。请在设置里点「一键安装离线语音」，或运行 scripts/register-nvsa.ps1。`,
         installed: names,
         detail: { installedCount: names.length, sample: names.slice(0, 8), nvsaConfig: readNvsaConfig() },
       };
@@ -344,6 +370,8 @@ class SapiBackend {
       message: p && !p.value.available ? p.value.message : null,
       installedCount: p && p.value.installed ? p.value.installed.length : null,
       voices: p && p.value.voices ? p.value.voices : [],
+      // 长驻通道被保活判定死亡后自动重建；这里留一条最近记录，便于排查「偶发降级」
+      lastHostDeath: this._lastHostDeath || null,
     };
   }
 
@@ -353,3 +381,6 @@ class SapiBackend {
 }
 
 module.exports = SapiBackend;
+// voiceDeploy 复用同一份「读 HKCU 注册表」实现（避免两套解析、两套失败语义）
+module.exports.readNvsaConfig = readNvsaConfig;
+module.exports.REG_KEY = REG_KEY;

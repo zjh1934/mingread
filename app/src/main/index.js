@@ -24,6 +24,8 @@ const { getBridge } = require('./ttsBridge');
 const { registerIpc } = require('./ipc');
 const { startClipboardMonitor } = require('./clipboardMonitor');
 const { registerHotkeyTray } = require('./hotkeyTray');
+// v2.4.0 延迟优化：常驻 PowerShell 抓取通道（划词抓取 771ms → 稳态 33ms 的关键）
+const { initCaptureHost } = require('./platform/captureHost');
 const settingsStore = require('./settingsStore');
 const floatBall = require('./floatBall');
 const { warmupVoiceSetup } = require('./voiceSetup');
@@ -199,6 +201,12 @@ function bootstrap() {
     hotkeyRef = registerHotkeyTray(getMainWindow, () => state.hotkey, () => floatBall.toggle());
     state.hotkeyRef = hotkeyRef;
     state.hotkeyOk = !!(hotkeyRef && typeof hotkeyRef.isRegistered === 'function' && hotkeyRef.isRegistered());
+    // v2.4.0：预热抓取宿主。冷启动实测 0.9~1.1s；不预热则首次按 F1 要吃「宿主启动 + 超时」
+    // ≈1.7s，比旧的一次性 powershell 还慢 —— 必须在窗口显示后立刻拉起，但不 await（不挡首屏）。
+    // 失败不影响功能：captureSelection 会自动回退一次性进程（约 0.7s），只是慢一点。
+    initCaptureHost()
+      .then((w) => console.log(`[capture] host warm ok=${w.ok} warmMs=${w.warmMs} ${w.error || ''}`))
+      .catch((e) => console.warn('[capture] host warm failed:', e && e.message));
     // 悬浮球：按 floatBallEnabled 初始化（v2.2 默认开）
     floatBall.initFloatBall(getMainWindow, () => ({
       playback: state.playback,

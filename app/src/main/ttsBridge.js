@@ -26,6 +26,11 @@ const { getSettings } = require('./settingsStore');
 
 const ENGINE_LABEL = { sapi: '本地离线语音（NVSA）', espeak: 'espeak-ng 中文语音（沙箱/CI 验证专用）', edge: '微软 Edge 在线语音' };
 
+// 在线保活节奏：与 edgeTtsBackend 的保活一致（真实短合成，见该文件头说明）。
+// 放在 bridge 侧是因为它掌握生命周期（构造 → 启动，dispose → 停），
+// 引擎侧只负责「做一次真实短合成」这一件事。
+const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
+
 /**
  * 构建引擎链（顺序即探测顺序）：
  *   不传注入 → 产品/沙箱默认链 [SAPI, espeak, Edge]；
@@ -65,6 +70,7 @@ class TtsBridge {
     this._fallback = null; // { from, to, reason, message, code, attempts, at }
     this._listeners = new Set();
     this._warmupDone = false;
+    this._keepAliveTimer = null;
     if (!o.noWarmup) {
       // 后台预热：把各引擎的冷启动（PowerShell 通道 / espeak 首次进程）挪到空闲时，不在热键路径上支付
       setImmediate(() => this.warmup());
@@ -92,6 +98,20 @@ class TtsBridge {
       s = {};
     }
     return s.autoFallback !== false && s.edgeEnabled !== false;
+  }
+
+  /**
+   * 音色兜底（所选音色失败 → 回退兜底链，见 voiceCatalog.VOICE_FALLBACK_CHAIN）是否允许。
+   * 缺省开启：宁可换个音色也要有声音（低视力用户的第一诉求是「读出来」）。
+   */
+  get voiceFallback() {
+    let s = {};
+    try {
+      s = getSettings();
+    } catch (e) {
+      s = {};
+    }
+    return s.voiceFallback !== false;
   }
 
   // ---- 音色 ----
@@ -240,13 +260,22 @@ class TtsBridge {
       throw err;
     }
     try {
-      const res = await this.online.synthesize(text, { ...o, voiceId: edgeVoiceIdOf(key) });
+      const res = await this.online.synthesize(text, {
+        ...o,
+        voiceId: edgeVoiceIdOf(key),
+        // 音色兜底（云希→晓晓）：默认开，设置里 voiceFallback=false 时只认所选音色
+        voiceFallback: this.voiceFallback,
+      });
+      // 在线引擎内部回退过音色时，把「换了音色」这件事一并挂出来（不覆盖引擎级降级原因）
+      const voiceNote = res.fallbackReason || null;
       return {
         ...res,
         engine: 'edge',
         local: false,
         degraded: true,
-        fallbackReason: this._fallback,
+        fallbackReason: voiceNote
+          ? { ...(this._fallback || {}), voiceFallback: voiceNote }
+          : this._fallback,
         format: res.format || 'mp3',
       };
     } catch (e) {
@@ -369,6 +398,18 @@ class TtsBridge {
       if (typeof eng.resetHost === 'function') eng.resetHost();
       await this._safeAsync(() => eng.probe(true), { available: false });
     }
+    // NVSA 刚部署完成时本地引擎是冷的（长驻通道 + 模型加载都在首次合成里）：
+    // 这里对每个「可用」的本地引擎都补一次预热，切到本地就能立刻进热路径。
+    // 只预热可用的，未注册的引擎预热也没意义（还会白白拉进程）。
+    for (const eng of this.locals) {
+      const lp = eng.lastProbe ? eng.lastProbe() : null;
+      if (!lp || !lp.available || typeof eng.warmup !== 'function') continue;
+      try {
+        eng.warmup();
+      } catch (e) {
+        /* 预热失败不影响探测结果，下一次合成会自己重试 */
+      }
+    }
     this._cache = null;
     this._notify();
     return this.getEngineStatus();
@@ -377,20 +418,47 @@ class TtsBridge {
   /** 后台预热（构造时自动调用一次） */
   warmup() {
     this._warmupDone = true;
+    // 在线保活：热键路径上不能有「冷连」——由 bridge 掌管生命周期（dispose 时清掉）
+    this._startKeepAlive();
     return this._safeAsync(async () => {
       for (const eng of this.locals) {
         const p = await eng.probe();
         if (p.available && typeof eng.warmup === 'function') eng.warmup();
         if (p.available) break; // 链路首个可用引擎预热即可
       }
-      if (typeof this.online.warmup === 'function') this.online.warmup();
+      // 真实短合成预热在线引擎（失败只记 onlineLastError，不抛）
+      if (typeof this.online.warmup === 'function') await this.online.warmup();
       this._cache = null;
       this._notify();
       return null;
     }, null);
   }
 
+  /**
+   * 启动在线保活定时器（幂等）。
+   * 为什么不自己合成：edgeTtsBackend 才知道「真实短合成」怎么写（令牌/格式/丢弃音频），
+   * bridge 只按节奏调它的 warmup()。
+   */
+  _startKeepAlive() {
+    if (this._keepAliveTimer) return this._keepAliveTimer;
+    if (!this.online || typeof this.online.warmup !== 'function') return null;
+    const timer = setInterval(() => {
+      // _safeAsync 不会 reject（引擎内部也已全包 try/catch），这里双保险
+      this._safeAsync(() => this.online.warmup(), null);
+    }, KEEPALIVE_INTERVAL_MS);
+    if (typeof timer.unref === 'function') timer.unref();
+    this._keepAliveTimer = timer;
+    return timer;
+  }
+
+  _stopKeepAlive() {
+    if (!this._keepAliveTimer) return;
+    clearInterval(this._keepAliveTimer);
+    this._keepAliveTimer = null;
+  }
+
   dispose() {
+    this._stopKeepAlive();
     this._listeners.clear();
     for (const e of this.engines) {
       try {

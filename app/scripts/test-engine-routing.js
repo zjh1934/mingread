@@ -211,11 +211,24 @@ const stubEdge = (errMsg, code) => ({
     b.dispose();
   });
 
-  console.log('\n=== 7. Linux 默认（无注入、真实环境）→ 本地不可用，在线路径正常 ===');
+  console.log('\n=== 7. 真实环境默认（无注入）→ 本地状态可解释，在线路径正常 ===');
   {
     const b = newBridge();
     const p = await b.local.probe(true);
-    check('非 Windows：本地不可用且原因明确', p.available === false && p.reason === LOCAL_REASON.NOT_WINDOWS, p);
+    // 断言必须平台自适应：旧写法把「Linux 沙箱」当前提写死成 p.reason === NOT_WINDOWS，
+    // 在 Windows 上恒不成立（本机实测 reason=VOICE_NOT_REGISTERED），属于断言缺陷而非功能回归。
+    if (process.platform !== 'win32') {
+      check('非 Windows：本地不可用且原因明确', p.available === false && p.reason === LOCAL_REASON.NOT_WINDOWS, p);
+    } else if (p.available) {
+      check('Windows 且本地语音已就绪：可用', p.available === true, p);
+    } else {
+      // 未装 NVSA 是首次运行的常态：原因必须可播报，且不能是 NOT_WINDOWS（那说明平台判定写错了）
+      check(
+        'Windows 未装本地语音：原因可解释（非 NOT_WINDOWS）',
+        !!p.reason && p.reason !== LOCAL_REASON.NOT_WINDOWS,
+        p
+      );
+    }
     check('状态可出（应用不崩）', !!b.getStatus().engine.id, b.getStatus().engine);
     // 唯一依赖真实网络的用例：微软在线端点在沙箱里会间歇性限流（返回 200 而非 101），
     // 连不上时记为 SKIP（环境问题），不算实现缺陷。
@@ -226,8 +239,14 @@ const stubEdge = (errMsg, code) => ({
       skip('在线合成（真实网络）不可达', e.message);
     }
     if (r) {
-      check('走在线 edge', r.engine === 'edge', r.engine);
-      check('mp3 有数据', r.audioData.byteLength > 1000, r.audioData.byteLength);
+      // 本地语音就绪时本地优先（NVSA 已装），否则必须走在线 edge 兜底 —— 两种都算正确
+      const expectLocal = p.available;
+      check(
+        expectLocal ? '本地语音就绪 → 走本地引擎' : '走在线 edge',
+        expectLocal ? r.engine !== 'edge' : r.engine === 'edge',
+        r.engine
+      );
+      check('音频有数据', r.audioData.byteLength > 1000, r.audioData.byteLength);
     }
     b.dispose();
   }

@@ -64,6 +64,26 @@ const AUDIO_PAGE = `<!doctype html><html><head><meta charset="utf-8"></head><bod
     return true;
   };
 
+  // 预热：建 AudioContext + 用一段 1 样本的静音真正把输出设备/音频线程拉起来
+  // （Windows 上首次 WASAPI 打开是几十到上百毫秒，正好压在第一次 cue 上）。
+  // 建窗后调一次，之后 cue 只剩排音的时间。
+  window.__primeAudio = function () {
+    try {
+      var c = ac();
+      var buf = c.createBuffer(1, 1, c.sampleRate);
+      var s = c.createBufferSource();
+      var g = c.createGain();
+      g.gain.value = 0.0001;
+      s.buffer = buf;
+      s.connect(g); g.connect(c.destination);
+      s.start(0);
+      s.onended = function () { try { s.disconnect(); } catch (e) {} };
+      return c.state;
+    } catch (e) {
+      return 'fail:' + e;
+    }
+  };
+
   // 离线渲染同一份音色，用于自检：没有声卡也能验证"有声音 + 时长 <100ms"
   window.__renderCue = function (type) {
     var list = CUES[type] || CUES.press;
@@ -142,9 +162,22 @@ function ensureAudioWindow() {
   });
   readyPromise = audioWin
     .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(AUDIO_PAGE))
+    .then(() => primeAudio(audioWin))
     .then(() => audioWin)
     .catch(() => null);
   return readyPromise;
+}
+
+/**
+ * 建窗后预热 AudioContext（压掉第一次 cue 的 context 创建 + 输出设备打开开销）。
+ * 预热失败绝不影响窗口可用性：cue 仍会自己 ac() 兜底，失败也照样如实返回 {ok:false}。
+ */
+async function primeAudio(win) {
+  try {
+    if (win && !win.isDestroyed()) await win.webContents.executeJavaScript('window.__primeAudio()');
+  } catch (e) {
+    /* 预热失败不致命 */
+  }
 }
 
 function disposeAudioWindow() {

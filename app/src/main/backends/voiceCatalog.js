@@ -26,6 +26,18 @@ const SAPI_VOICES = [
 ];
 
 const VOICE_KEYS = ['xiaoxiao', 'yunxi'];
+const DEFAULT_KEY = 'xiaoxiao';
+
+/**
+ * 跨引擎统一 key 的兜底链（按顺序尝试，取第一个可用的；空数组 = 无兜底）。
+ * 用户口径：在线兜底单音色即可 —— 云希没声时回退晓晓，保证「一定有声音」；
+ * 体系可扩展：加音色只需在 SAPI_VOICES / constants.EDGE_VOICES 里加一条，
+ * 再在这里补一行兜底链，引擎侧代码零改动。
+ */
+const VOICE_FALLBACK_CHAIN = {
+  xiaoxiao: [],
+  yunxi: ['xiaoxiao'],
+};
 
 /**
  * 从任意音色 id（edge:xiaoxiao / sapi:yunxi / xiaoxiao）解析出音色 key
@@ -71,4 +83,39 @@ function edgeVoiceIdOf(key) {
   return v ? v.id : C.DEFAULT_VOICE_ID;
 }
 
-module.exports = { SAPI_VOICES, VOICE_KEYS, voiceKeyOf, matchesVoice, pickSapiVoices, edgeVoiceIdOf };
+/**
+ * 某音色 key 的兜底 key 列表（不含自身，已去重、已过滤未知 key）
+ * @param {string} [key]
+ * @returns {string[]}
+ */
+function fallbackKeysOf(key) {
+  const k = VOICE_KEYS.indexOf(String(key || '')) >= 0 ? String(key) : DEFAULT_KEY;
+  const chain = VOICE_FALLBACK_CHAIN[k] || [];
+  return chain.filter((x, i) => x !== k && VOICE_KEYS.indexOf(x) >= 0 && chain.indexOf(x) === i);
+}
+
+/**
+ * 尝试顺序：自身 + 兜底链。调用方按序尝试，第一个成功即用；
+ * 用到非首位的那次必须对外标记 degraded + fallbackReason（不得静默）。
+ * @param {string} [key]
+ * @returns {Array<{key:string, isFallback:boolean}>}
+ */
+function voicePlanOf(key) {
+  const primary = VOICE_KEYS.indexOf(String(key || '')) >= 0 ? String(key) : DEFAULT_KEY;
+  return [{ key: primary, isFallback: false }].concat(
+    fallbackKeysOf(primary).map((x) => ({ key: x, isFallback: true }))
+  );
+}
+
+module.exports = {
+  SAPI_VOICES,
+  VOICE_KEYS,
+  DEFAULT_KEY,
+  VOICE_FALLBACK_CHAIN,
+  voiceKeyOf,
+  matchesVoice,
+  pickSapiVoices,
+  edgeVoiceIdOf,
+  fallbackKeysOf,
+  voicePlanOf,
+};

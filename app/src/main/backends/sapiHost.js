@@ -11,6 +11,11 @@
 //   · 放弃每次起进程（冷启动）／放弃写临时 .ps1 再 -File（asar 内无法被外部进程读取、且留盘）。
 //     -EncodedCommand 直接把脚本以 UTF-16LE base64 传给 powershell，无需落盘、无需执行策略改动。
 //   · 放弃命名管道：Node↔子进程的三根匿名管道已是本机最低开销，命名管道只增加复杂度。
+//
+// 保活（v2.5）：宿主进程可能因为 SAPI 卡死 / 被安全软件杀掉而变成「还在但不出声」。
+//   · 每 60s 发一次 ping（宿主已实现 ping 命令），只做健康检查，不在热键路径上；
+//   · 连续 2 次失败 → 判定通道死亡：杀掉进程，回调 onDead，由 SapiBackend 失效缓存并在后台重拉 + 预热；
+//   · 通道正忙（有在途请求，例如长文本合成）时跳过本轮，避免把「正在说话」误判成死亡。
 'use strict';
 
 const { spawn } = require('child_process');
@@ -18,6 +23,9 @@ const { spawn } = require('child_process');
 const FRAME_PREFIX = 'LDNSAPI ';
 const READY_TIMEOUT_MS = 20000;
 const DEFAULT_TIMEOUT_MS = 15000;
+const KEEPALIVE_MS = 60000;
+const KEEPALIVE_TIMEOUT_MS = 5000;
+const KEEPALIVE_MAX_FAILS = 2;
 const MAX_STDERR = 4096;
 
 /**
@@ -138,11 +146,19 @@ class SapiHost {
    * @param {number} [opts.readyTimeoutMs]
    * @param {number} [opts.requestTimeoutMs]
    * @param {(msg:string)=>void} [opts.onDebug]
+   * @param {number} [opts.keepaliveMs] ping 间隔（0 = 关闭保活）
+   * @param {(err:Error)=>void} [opts.onDead] 连续 ping 失败后回调（上层负责 invalidate + 后台重拉）
    */
   constructor(opts = {}) {
     this._readyTimeoutMs = opts.readyTimeoutMs || READY_TIMEOUT_MS;
     this._requestTimeoutMs = opts.requestTimeoutMs || DEFAULT_TIMEOUT_MS;
     this._onDebug = opts.onDebug || (() => {});
+    this._keepaliveMs = opts.keepaliveMs === 0 ? 0 : opts.keepaliveMs || KEEPALIVE_MS;
+    this._onDead = opts.onDead || null;
+    this._kaTimer = null;
+    this._kaFails = 0;
+    this._kaTicking = false;
+    this._disposed = false;
     this._proc = null;
     this._ready = null;
     this._pending = new Map();
@@ -248,6 +264,7 @@ class SapiHost {
         clearTimeout(timer);
         this._startReject = null;
         this._onDebug(`sapi host ready: ${JSON.stringify(info || {})}`);
+        this._startKeepalive();
         resolve(info || {});
       };
       this._waitReady = onReady;
@@ -297,6 +314,8 @@ class SapiHost {
   }
 
   _kill() {
+    // 注意：这里**不停**保活定时器。请求超时也会走到 _kill，需要让下一轮 ping 看到
+    // 「进程不在了」并累计失败次数，否则通道卡死后永远不会触发 onDead。
     if (this._proc && this._proc.exitCode === null) {
       try {
         this._proc.kill();
@@ -376,7 +395,66 @@ class SapiHost {
     });
   }
 
+  // ---- 保活 ----
+
+  _startKeepalive() {
+    if (!this._keepaliveMs || this._disposed) return;
+    if (this._kaTimer) return; // 已在跑（同一进程重复 ready 不叠加定时器）
+    this._kaFails = 0;
+    this._kaTimer = setInterval(() => this._keepaliveTick(), this._keepaliveMs);
+    // 不把定时器算进事件循环引用：应用退出 / 探针脚本结束时不被它拖住
+    if (typeof this._kaTimer.unref === 'function') this._kaTimer.unref();
+  }
+
+  _stopKeepalive() {
+    if (this._kaTimer) {
+      clearInterval(this._kaTimer);
+      this._kaTimer = null;
+    }
+    this._kaFails = 0;
+  }
+
+  /**
+   * 一次健康检查：通道不在 = 失败；有在途请求 = 本轮跳过（长文本合成会让 ping 排队，不能算死）。
+   * 连续 KEEPALIVE_MAX_FAILS 次失败 → 判定死亡，交给上层重建。
+   */
+  async _keepaliveTick() {
+    if (this._disposed || this._kaTicking) return;
+    if (!this.isRunning) {
+      this._kaFails += 1;
+      if (this._kaFails >= KEEPALIVE_MAX_FAILS) this._onKeepaliveDead(new Error('本地语音通道已停止'));
+      return;
+    }
+    if (this._pending.size > 0) return; // 忙：本轮不作为健康信号
+    this._kaTicking = true;
+    try {
+      await this.request('ping', {}, KEEPALIVE_TIMEOUT_MS);
+      this._kaFails = 0;
+    } catch (e) {
+      this._kaFails += 1;
+      this._onDebug(`sapi keepalive ping failed (${this._kaFails}/${KEEPALIVE_MAX_FAILS}): ${e.message}`);
+      if (this._kaFails >= KEEPALIVE_MAX_FAILS) this._onKeepaliveDead(e);
+    } finally {
+      this._kaTicking = false;
+    }
+  }
+
+  _onKeepaliveDead(err) {
+    this._stopKeepalive();
+    this._onDebug(`sapi host 判定死亡：${err && err.message}`);
+    this._kill();
+    if (typeof this._onDead === 'function') {
+      try {
+        this._onDead(err || new Error('本地语音通道已停止'));
+      } catch (e) {
+        /* 回调异常不影响后续请求 */
+      }
+    }
+  }
+
   dispose() {
+    this._disposed = true;
+    this._stopKeepalive();
     this._rejectAll(new Error('本地语音通道已释放'));
     this._kill();
     if (this._exitHandler) {

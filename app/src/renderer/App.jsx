@@ -18,6 +18,9 @@ import VoicePicker from './components/VoicePicker';
 import TimerPanel from './components/TimerPanel';
 import TuningPanel from './components/TuningPanel';
 import SettingsDialog from './components/SettingsDialog';
+// v2.4.0：离线语音（NVSA 本地引擎）一键部署引导。未就绪时在内容区顶部显示一张卡片，
+// 装好后组件自身返回 null，不占首屏、不干扰朗读。
+import VoiceDeployGate from './components/VoiceDeployGate';
 
 const SAMPLE_TEXT =
   '朗读女 Neo 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
@@ -732,6 +735,9 @@ export default function App() {
             gap: { xs: 1.5, md: 2 },
           }}
         >
+          {/* ⓪ v2.4.0 离线语音引导：本地引擎是延迟根治项，未安装时在顶部提示一键部署 */}
+          <VoiceDeployGate />
+
           {/* ① 当前句 + 超大播放控制 + 语速（一级） */}
           <Controls
             isPlaying={playback.isPlaying}

@@ -200,6 +200,16 @@ function registerIpc(getWindow, state) {
     return getBridge().getStatus();
   });
 
+  // ---- v2.4.0 离线语音一键部署（本地 NVSA 引擎，用户诉求「不要延迟」的根治项）----
+  // 状态机在 voiceDeploy.js；这里只暴露三件事：读状态 / 触发检测 / 触发安装。
+  // 安装过程最多弹一次 UAC；任何失败都不影响使用 —— Edge 兜底链始终完整。
+  // 延迟加载：voiceDeploy 会间接用到 ttsBridge，避免与顶部 require 形成循环依赖。
+  const voiceDeploy = require('./voiceDeploy').getVoiceDeploy();
+  ipcMain.handle('voice:deploy:getState', () => voiceDeploy.getSnapshot());
+  ipcMain.handle('voice:deploy:detect', () => voiceDeploy.detect({ announce: false }));
+  ipcMain.handle('voice:deploy:install', () => voiceDeploy.install());
+  voiceDeploy.onStateChanged((s) => sendToWindow(getWindow, 'voice:deploy:state', s));
+
   // 试听
   ipcMain.handle('voice:preview', async (_e, payload) => {
     const { voiceId, text, opts } = payload || {};

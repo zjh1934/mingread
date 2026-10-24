@@ -20,6 +20,12 @@
 
 const { clipboard } = require('electron');
 const platform = require('./platform');
+// 抓取通道直达 platform/keystroke：platform/index.js 的出口没有 captureSelection，
+// 而「发键+读剪贴板」的合体动作只有常驻宿主能一次做完（见 captureHost.js 文件头）。
+const keystroke = require('./platform/keystroke');
+
+// Get-Clipboard -Raw 对超长文本可能截断；超过这个长度就用进程内读复核（1~3ms）
+const HOST_TEXT_SUSPECT_LEN = 32000;
 
 /** 文本来源：上层必须据此区分播报 */
 const SOURCE = {
@@ -56,16 +62,8 @@ const MESSAGE = {
 
 const CLIPBOARD_FALLBACK_MESSAGE = '未获取到选区，下面读的是剪贴板里的内容，不是你刚才选中的文字。';
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 function defaultTimeout(strategy) {
   return strategy === 'win32-sendkeys' ? 1200 : 600;
-}
-
-function defaultPoll(strategy) {
-  return strategy === 'win32-sendkeys' ? 30 : 15;
 }
 
 /** 统一出口构造，保证字段齐全 */
@@ -95,7 +93,8 @@ async function readSelection(opts = {}) {
   const caps = platform.getCapabilities();
   const strategy = caps.strategy;
   const timeoutMs = opts.timeoutMs || defaultTimeout(strategy);
-  const pollMs = opts.pollMs || defaultPoll(strategy);
+  // 轮询间隔默认交给平台层（宿主 5ms；兜底通道自己会抬到 ≥15ms），这里只透传显式覆盖
+  const pollMs = opts.pollMs;
   const startedAt = Date.now();
   const took = () => Date.now() - startedAt;
 
@@ -149,26 +148,40 @@ async function readSelection(opts = {}) {
     });
   }
 
-  // 3. 发 Ctrl+C → 轮询等剪贴板变成与"发键前"不同的内容
+  // 3. 抓取：一次 captureSelection（Windows 走常驻宿主，发键与 5ms 粒度轮询都在宿主内；
+  //    宿主不可用时平台层自动回退"一次性 PowerShell + Node 轮询"）。
+  //    命中判据仍旧是"剪贴板内容 != 发键前"，语义与 v2.3 完全一致。
   let text = '';
   let sendInfo = null;
+  let via = 'none';
   try {
-    sendInfo = await platform.sendCopyKeystroke();
-    if (!sendInfo.ok) {
-      return fallback(CODE.SEND_KEY_FAILED, {
-        detail: { error: sendInfo.error, sendTookMs: sendInfo.tookMs },
+    const cap = await keystroke.captureSelection({
+      before,
+      timeoutMs,
+      pollMs,
+      // 兜底通道要有自己的快照读：进程内读 1~3ms，比外部工具稳（见 platform/index.js 注释）
+      readClipboard: () => clipboard.readText() || '',
+    });
+    via = cap.via || 'none';
+    sendInfo = { tookMs: cap.sendTookMs == null ? -1 : cap.sendTookMs };
+    if (cap.ok && cap.text) {
+      text = cap.text;
+      // 已知坑：Get-Clipboard -Raw 对超长文本可能截断。此时剪贴板里还是刚复制的内容，
+      // 用进程内读复核一次（1~3ms），只在"更长且同前缀"时采用，避免拿别的东西冒充选区。
+      if (text.length >= HOST_TEXT_SUSPECT_LEN) {
+        try {
+          const live = clipboard.readText() || '';
+          if (live.length > text.length && live.slice(0, 64) === text.slice(0, 64)) text = live;
+        } catch (e) {
+          /* 复核失败就用宿主读到的 */
+        }
+      }
+    } else if (cap.error) {
+      return fallback(cap.stage === 'send' ? CODE.SEND_KEY_FAILED : CODE.CAPTURE_ERROR, {
+        detail: { error: cap.error, via, sendTookMs: sendInfo.tookMs },
       });
     }
-
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const cur = await platform.readClipboardText(clipboard);
-      if (cur && cur !== before) {
-        text = cur;
-        break;
-      }
-      await sleep(pollMs);
-    }
+    // 无 error 且无 text：没选中（或等到超时）——落到下面的 NO_SELECTION
   } catch (e) {
     console.error('[selection] capture failed:', e && e.message);
     return fallback(CODE.CAPTURE_ERROR, { detail: { error: e && e.message } });
@@ -186,13 +199,13 @@ async function readSelection(opts = {}) {
       stale: false,
       strategy,
       tookMs: took(),
-      detail: { sendTookMs: sendInfo ? sendInfo.tookMs : -1, timeoutMs },
+      detail: { sendTookMs: sendInfo ? sendInfo.tookMs : -1, timeoutMs, via },
     });
   }
 
   // 5. 没有选中（Ctrl+C 没改写剪贴板）—— 不静默读旧剪贴板
   return fallback(CODE.NO_SELECTION, {
-    detail: { sendTookMs: sendInfo ? sendInfo.tookMs : -1, timeoutMs },
+    detail: { sendTookMs: sendInfo ? sendInfo.tookMs : -1, timeoutMs, via },
   });
 }
 

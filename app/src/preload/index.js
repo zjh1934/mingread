@@ -25,6 +25,18 @@ const api = {
     },
   },
 
+  // v2.4.0 离线语音一键部署（NVSA 本地引擎）：首启引导组件 VoiceDeployGate 用
+  voiceDeploy: {
+    getState: () => ipcRenderer.invoke('voice:deploy:getState'),
+    detect: () => ipcRenderer.invoke('voice:deploy:detect'),
+    install: () => ipcRenderer.invoke('voice:deploy:install'),
+    onStateChanged: (cb) => {
+      const listener = (_e, payload) => cb(payload);
+      ipcRenderer.on('voice:deploy:state', listener);
+      return () => ipcRenderer.removeListener('voice:deploy:state', listener);
+    },
+  },
+
   // 划词朗读
   readSelection: () => ipcRenderer.invoke('selection:read'),
 

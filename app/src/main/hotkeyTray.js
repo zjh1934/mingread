@@ -1,6 +1,13 @@
 // 全局热键 + 系统托盘。默认热键 F1（v2.4.0 起，用户 2026-10-24 明确要求"选中文字按 F1 即读"，
 // 推翻基线 P2-11 的 Ctrl+Alt+R 默认；Ctrl+Alt+R 降为设置里的备选预设）：在任意位置选中
-// 文字后按热键直接朗读。F1 被占用时（典型：旧版「朗读女」常驻）语音引导退出 + 自动重试注册。
+// 文字后按热键直接朗读。
+// v2.4.0 起 F1 有**三层保障**（用户诉求是「按 F1 就必须出声」，不能因为别人占了键就失效）：
+//   ① 官方 API：globalShortcut.register('F1')，正常情况走这条；
+//   ② 低级键盘钩子旁路：RegisterHotKey 是独占的，被别的程序先占（本机实测：网吧管理客户端
+//      稳定占用 F1，globalShortcut 恒返回 false）时，用 WH_KEYBOARD_LL 钩子旁听按键 ——
+//      钩子挂在输入分发链最前端，热键被独占也照样收得到（见 platform/keyboardHook.js）；
+//   ③ 冲突播报：连钩子都装不上（koffi 缺失/非 Windows）才播报不可用，并每 5s 重试注册，
+//      外部程序一放手就切回官方 API（切回后立刻卸钩子，避免一次按键触发两遍）。
 // v2.2：注册结果可观测（console.log + isRegistered()），失败时托盘气泡 + 主窗口 hotkey:conflict 事件。
 // v2.3.1（三项修复，均为低视力可用性红线）：
 //   1. 注册失败除托盘气泡/窗口事件外，必须经 a11yFeedback.announce 语音播报
@@ -17,6 +24,8 @@ const path = require('path');
 const fs = require('fs');
 const { readSelection } = require('./selectionReader');
 const zoomController = require('./zoomController');
+// v2.4.0：F1 被其他程序独占时的旁路捕获层（低级键盘钩子，koffi 缺失时自身降级为不可用）
+const keyboardHook = require('./platform/keyboardHook');
 // γ 的 a11yFeedback：只读使用其导出（announce / cue），不修改其实现
 const a11y = require('./a11yFeedback');
 // 抓选区会短暂改写剪贴板：告知剪贴板监视器静默，避免被误判成「用户又复制了一次」
@@ -24,6 +33,14 @@ const { suppressAutoRead } = require('./clipboardMonitor');
 
 /** v2.4.0 默认热键：F1（用户明确要求；Ctrl+Alt+R 为备选预设） */
 const DEFAULT_HOTKEY = 'F1';
+
+/**
+ * 可用「低级键盘钩子」旁路捕获的加速器 → 虚拟键码。
+ * 只收单键：组合键（Ctrl+Alt+R 等）需要跟踪修饰键状态，钩子实现复杂度不成比例，
+ * 而且组合键冲突概率远低于 F1（F1 是各路软件的常用热键）。
+ * F1 = VK_F1(0x70)。
+ */
+const HOOKABLE_ACCELS = { F1: 0x70 };
 
 function trayIcon() {
   const candidates = [];
@@ -95,13 +112,20 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     }
   }
 
-  /** 注册失败：语音播报（主进程侧，窗口未聚焦也能听到）+ 托盘气泡 + 通知主窗口 */
-  function reportConflict(accelerator) {
+  /** 注册失败：语音播报（主进程侧，窗口未聚焦也能听到）+ 托盘气泡 + 通知主窗口
+   *  @param {string} accelerator
+   *  @param {{hooked?:boolean}} [opts] hooked=true 表示低级钩子已接管：功能可用，文案必须改，
+   *         否则会对着「已经能按 F1 朗读」的用户播报「朗读暂不可用」，属严重误导。
+   */
+  function reportConflict(accelerator, opts) {
+    const hooked = !!(opts && opts.hooked);
     // 基线 P1-7 / 指标 G：状态变化必须可感知。语音播报走主进程常驻音频窗口，
     // 与主窗口是否聚焦/可见无关；announce 内部有 800ms 去重，重复注册失败不会刷屏
     try {
       const p = a11y.announce({
-        text: `热键 ${accelerator} 被其他程序占用，朗读暂不可用。常见原因是旧版朗读女正在运行，请退出后会自动重试，或在设置中更换热键。`,
+        text: hooked
+          ? `热键 ${accelerator} 已被其他程序独占，已自动改用底层监听，按 ${accelerator} 照样能朗读。若想彻底接管，退出占用它的程序即可，我会自动切换回来。`
+          : `热键 ${accelerator} 被其他程序占用，朗读暂不可用。常见原因是旧版朗读女正在运行，请退出后会自动重试，或在设置中更换热键。`,
         priority: 'high',
       });
       if (p && typeof p.then === 'function') {
@@ -117,8 +141,10 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     try {
       if (tray && !tray.isDestroyed()) {
         tray.displayBalloon({
-          title: '热键被占用',
-          content: `${accelerator} 被其他程序占用，朗读热键暂不可用。请在设置中更换热键后重试。`,
+          title: hooked ? '已接管热键' : '热键被占用',
+          content: hooked
+            ? `${accelerator} 被其他程序独占，已自动改用底层监听，照常按 ${accelerator} 即可朗读。`
+            : `${accelerator} 被其他程序占用，朗读热键暂不可用。请在设置中更换热键后重试。`,
         });
       }
     } catch (e) {
@@ -127,7 +153,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
       try {
-        win.webContents.send('hotkey:conflict', { accelerator });
+        win.webContents.send('hotkey:conflict', { accelerator, hooked });
       } catch (e) {
         /* 渲染进程未就绪时忽略 */
       }
@@ -260,6 +286,8 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
   let retryTimer = null;
   let retryCount = 0;
   let conflictActive = false;
+  /** v2.4.0：低级键盘钩子是否已接管（true 时 registered=false，但功能实际可用） */
+  let hookActive = false;
   const stopRetry = () => {
     if (retryTimer) {
       clearInterval(retryTimer);
@@ -281,32 +309,74 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     }, RETRY_INTERVAL_MS);
   };
 
-  /** 注册（或重注册）全局热键；返回是否成功。失败：播报冲突 + 启动自动重试；重试恢复：播报就绪 */
+  /**
+   * 官方 API 抢不到热键时，尝试用低级键盘钩子旁路捕获。
+   * 只对 HOOKABLE_ACCELS 里的单键生效（当前只有 F1）。
+   * @param {string} hk
+   * @returns {boolean} 钩子是否已接管
+   */
+  function tryHookFallback(hk) {
+    const vk = HOOKABLE_ACCELS[hk];
+    if (vk == null) return false;
+    if (hookActive) return true;
+    const ok = keyboardHook.start(() => {
+      // 与 globalShortcut 回调走同一入口：反馈音 → 防重入 → 抓选区
+      triggerSelectionRead();
+    }, { vkCode: vk });
+    if (ok) {
+      hookActive = true;
+      console.log(`[hotkey] low-level hook took over accelerator=${hk} vk=${vk}`);
+    } else {
+      console.warn(`[hotkey] low-level hook unavailable: ${keyboardHook.currentError()}`);
+    }
+    return ok;
+  }
+
+  /** 注册（或重注册）全局热键；返回功能是否可用（官方 API 或钩子任一生效）。
+   *  失败：播报冲突 + 启动自动重试；重试恢复：切回官方 API + 播报就绪 */
   const register = () => {
     const hk = getHotkey() || DEFAULT_HOTKEY;
     const ok = tryRegister();
     if (!ok) {
-      if (!conflictActive) reportConflict(hk); // 仅状态变化时播报，重试期间不刷屏
+      const hooked = tryHookFallback(hk);
+      if (!conflictActive) reportConflict(hk, { hooked }); // 仅状态变化时播报，重试期间不刷屏
       conflictActive = true;
+      // 钩子接管后仍然继续重试：外部程序一放手就切回官方 API（比钩子更可靠、开销更低）
       startRetry();
     } else {
       const recovered = conflictActive;
       conflictActive = false;
       stopRetry();
+      // 官方 API 已接管：必须卸钩子，否则一次按键会同时命中两条路径 → 朗读两遍
+      if (hookActive) {
+        keyboardHook.stop();
+        hookActive = false;
+        console.log('[hotkey] low-level hook released (globalShortcut took over)');
+      }
       if (recovered) announceReady();
     }
     refreshTrayLabel();
-    return ok;
+    return ok || hookActive;
   };
   register();
 
   return {
     tray,
     reregister: register,
-    isRegistered: () => registered,
+    isRegistered: () => registered || hookActive,
+    /** 诊断用：钩子是否支持/激活/命中统计 */
+    hookState: () => keyboardHook.getState(),
     dispose: () => {
       disposed = true;
       stopRetry();
+      if (hookActive) {
+        try {
+          keyboardHook.stop();
+        } catch (e) {
+          /* noop */
+        }
+        hookActive = false;
+      }
       try {
         if (tray) tray.destroy();
       } catch (e) {
