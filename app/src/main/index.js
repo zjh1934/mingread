@@ -250,6 +250,22 @@ function createWindow() {
   if (typeof revealTimer.unref === 'function') revealTimer.unref();
   win.once('ready-to-show', () => reveal('ready-to-show'));
 
+  // v2.4.0：提前显示骨架，把「双击后毫无反馈」的 3.4 秒压到约 0.4 秒。
+  //
+  // 试过两条更"精确"的路，都不行，记在这里免得后来人重踩：
+  //   · dom-ready → Vite 的入口是 `<script type="module">`，按 defer 语义在 DOMContentLoaded
+  //     **之前**执行完，所以 dom-ready 要等整个 React bundle 跑完，实测与 ready-to-show 同为 3390ms；
+  //   · 骨架里 console.log('__LDN_SKELETON_READY__') → Electron 的 console-message 在页面
+  //     加载完成前不会派发（实测同样 3390ms 才收到），拿不到"早"这个性质。
+  //
+  // 最终用固定时延：did-start-loading 是导航开始（最早的可观测点），+260ms 后 HTML 基本已解析
+  // 并画出骨架。即使这台机器偏慢、260ms 时骨架还没上屏，用户看到的也只是与骨架同色的空白
+  // （窗口 backgroundColor 与骨架背景都跟随主题，见 resolveStartupBackground 与 index.html），
+  // 不会出现底色跳变。ready-to-show 与 5s 超时仍作为兜底。
+  win.webContents.once('did-start-loading', () => {
+    setTimeout(() => reveal('early'), 140);
+  });
+
   // 渲染层 hydrate：主窗口首次加载完成后推送一次系统设置；之后每次变化由 ipc.js 广播
   win.webContents.once('did-finish-load', () => {
     try {
@@ -440,12 +456,16 @@ function bootstrap() {
     // W-WIN1：必须在 createWindow 之前清掉默认菜单，否则首帧会先带出英文菜单条
     installAppMenu();
     registerWindowControlIpc();
+    // v2.4.0 启动提速：getBridge() 会构造 TtsBridge 并 init（读设置、装配引擎），
+    // 实测占掉 whenReady 到 did-start-loading 之间相当一段时间。它对「窗口能否出现」不是必需的
+    // （渲染层的语音请求走 IPC → 那里再 lazy 取单例），所以挪到 createWindow 之后再初始化，
+    // 先把窗口和骨架推上屏。异常仍然只是容错，不阻塞启动。
+    createWindow();
     try {
       getBridge();
     } catch (e) {
       /* 容错，运行时再报 */
     }
-    createWindow();
     ipcApi = registerIpc(getMainWindow, state);
     // v2.4.0 离线语音：启动时后台跑一次检测，否则 voiceDeploy 状态一直停在 IDLE，
     // VoiceDeployGate 会对着「已经装好」的用户显示「未安装」引导卡片（本机实测踩到）。

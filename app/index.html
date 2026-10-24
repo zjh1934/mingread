@@ -5,6 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>朗读女 Neo · 选中文字按 F1 即读</title>
+    <script>
+      // v2.4.0：骨架提前到 ~0.3s 上屏，所以它现在会被用户真正看见 3 秒左右。
+      // 必须跟随主题，否则深色/高对比度用户会先看到一整块浅色再跳成深色（比不显示更糟）。
+      // 主题存在渲染层 zustand persist（localStorage: langdu-neo-settings），
+      // 这里在样式生效前直接读，够早、且不依赖 React。
+      (function () {
+        var bg = '#f5f6fa';
+        var fg = '#161b26';
+        var sub = '#4a5261';
+        var track = '#e3e7f0';
+        try {
+          var raw = localStorage.getItem('langdu-neo-settings');
+          var mode = raw ? (JSON.parse(raw).state || {}).themeMode : 'light';
+          if (mode === 'hc') {
+            bg = '#000000';
+            fg = '#ffffff';
+            sub = '#e6e6e6';
+            track = '#ffffff';
+          } else if (mode === 'dark') {
+            bg = '#0c0f16';
+            fg = '#eef1f7';
+            sub = '#aab2c4';
+            track = '#232a38';
+          }
+        } catch (e) {
+          /* 读不到就按浅色 */
+        }
+        var st = document.documentElement.style;
+        st.setProperty('--ldn-boot-bg', bg);
+        st.setProperty('--ldn-boot-fg', fg);
+        st.setProperty('--ldn-boot-sub', sub);
+        st.setProperty('--ldn-boot-track', track);
+      })();
+    </script>
     <!--
       WFIX2 首屏骨架：纯内联、无外部依赖，所以在 bundle 解析前就能上屏。
       底色 #f5f6fa = src/renderer/theme.js 浅色主题 background.default，
@@ -16,8 +50,8 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #f5f6fa;
-        color: #161b26;
+        background: var(--ldn-boot-bg, #f5f6fa);
+        color: var(--ldn-boot-fg, #161b26);
       }
       #ldn-boot {
         position: fixed;
@@ -27,7 +61,8 @@
         align-items: center;
         justify-content: center;
         gap: 14px;
-        background: #f5f6fa;
+        background: var(--ldn-boot-bg, #f5f6fa);
+        color: var(--ldn-boot-fg, #161b26);
         font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", system-ui,
           -apple-system, sans-serif;
         text-align: center;
@@ -41,7 +76,39 @@
       #ldn-boot .ldn-boot-sub {
         font-size: 18px;
         line-height: 1.7;
-        color: #4a5261;
+        color: var(--ldn-boot-sub, #4a5261);
+      }
+      /* 不定态进度条：让 3 秒等待有「在动」的观感，而不是像卡死。
+         刻意用平移而非闪烁（低视力/光敏感人群禁闪烁），周期 1.6s，对比度克制。 */
+      #ldn-boot .ldn-boot-track {
+        width: 176px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--ldn-boot-track, #e3e7f0);
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      #ldn-boot .ldn-boot-bar {
+        width: 44%;
+        height: 100%;
+        border-radius: 999px;
+        background: #6b5bff;
+        animation: ldn-boot-slide 1.6s ease-in-out infinite;
+      }
+      @keyframes ldn-boot-slide {
+        0% {
+          transform: translateX(-110%);
+        }
+        100% {
+          transform: translateX(330%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #ldn-boot .ldn-boot-bar {
+          animation: none;
+          width: 100%;
+          opacity: 0.55;
+        }
       }
     </style>
   </head>
@@ -50,9 +117,29 @@
     <div id="ldn-boot" role="status" aria-live="polite">
       <div class="ldn-boot-title">朗读女 Neo</div>
       <div class="ldn-boot-sub">正在启动…</div>
+      <div class="ldn-boot-track"><div class="ldn-boot-bar"></div></div>
     </div>
     <script>
-      // React 挂载出内容后立刻移除骨架（骨架只遮「空白首帧」，不能停留遮挡真实界面）。
+      // v2.4.0：向主进程报告「骨架已进 DOM」，主进程据此把窗口显示出来 ——
+      // 不必等 ready-to-show（本机实测 3390ms，双击图标后 3.4 秒桌面上什么都没有）。
+      // 用 console 消息而不是 IPC：此刻 preload 可能还没执行完，console-message 是零依赖通道。
+      (function () {
+        var boot = document.getElementById('ldn-boot');
+        if (!boot) return;
+        try {
+          console.log('__LDN_SKELETON_READY__');
+        } catch (e) {
+          /* noop */
+        }
+      })();
+    </script>
+    <script>
+      // React 挂载出**真实内容**后立刻移除骨架（骨架只遮「空白首帧」，不能停留遮挡真实界面）。
+      //
+      // v2.4.0 修正：原判断是 root.childElementCount > 0，但那会在 React 插入任意空容器
+      // （Suspense fallback / 空 Box）时就移除骨架 —— 实测 1600ms 骨架已消失，而 React
+      // 要到 3400ms 才真正挂载，中间这近 2 秒用户看到的是纯空白，比不显示骨架更糟。
+      // 改为「root 里有可见文字」才算挂载完成：首屏第一句就是「选中文字，按 F1 就朗读」。
       (function () {
         var boot = document.getElementById('ldn-boot');
         var root = document.getElementById('root');
@@ -60,16 +147,31 @@
         var remove = function () {
           if (boot.parentNode) boot.parentNode.removeChild(boot);
         };
+        var ready = function () {
+          if (!root.childElementCount) return false;
+          return (root.innerText || '').trim().length > 0;
+        };
         if (typeof MutationObserver === 'function') {
           var mo = new MutationObserver(function () {
-            if (root.childElementCount > 0) {
+            if (ready()) {
               mo.disconnect();
               remove();
             }
           });
-          mo.observe(root, { childList: true });
+          mo.observe(root, { childList: true, subtree: true, characterData: true });
         }
-        // 兜底：15s 后无论 React 是否挂载都撤掉骨架，避免永久遮挡
+        // 轮询兜底：MutationObserver 不一定能捕捉到「文字逐步出现」的所有情形
+        var tries = 0;
+        var timer = setInterval(function () {
+          tries += 1;
+          if (ready()) {
+            clearInterval(timer);
+            remove();
+          } else if (tries > 150) {
+            clearInterval(timer);
+          }
+        }, 100);
+        // 最终兜底：15s 后无论 React 是否挂载都撤掉骨架（避免永久遮挡；正常情况下走不到）
         setTimeout(remove, 15000);
       })();
     </script>

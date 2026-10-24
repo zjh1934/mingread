@@ -12,7 +12,6 @@ import RemoveIcon from '@mui/icons-material/Remove';
 
 import { useSettings } from './store/settingsStore';
 import { useStreamingPlayback } from './hooks/useStreamingPlayback';
-import { useDelayedAnnounce } from './hooks/useDelayedAnnounce';
 import { useTts } from './hooks/useTts';
 import announcer from './services/announcer';
 import { fs, su } from './theme'; // α：px → rem/calc(px*scale)，随字号档位缩放
@@ -103,9 +102,8 @@ export default function App() {
   });
   const { exporting, preview, exportAudio } = useTts();
 
-  // 「开始 / 继续朗读」这类结果性播报改为延迟确认：700ms 内真的出声就不播，
-  // 免得本地引擎 150ms 出声时「已开始朗读」和正文抢同一个喇叭。
-  const startAnnounce = useDelayedAnnounce({ isPlaying: playback.isPlaying });
+  // v2.4.0：删除了「开始/继续朗读」的延迟确认播报（useDelayedAnnounce）。
+  // 原因见 handleRead 里的说明：正常路径就不该说话，慢路径误报反而是干扰。
 
   // 语音状态：启动读取一次 + 订阅主进程变化
   useEffect(() => {
@@ -269,8 +267,6 @@ export default function App() {
 
   const handleRead = useCallback(
     async (rawText, options = {}) => {
-      // 新一轮朗读：先作废上一次还没到点的「已开始朗读」，否则它会在这次朗读中途冒出来
-      startAnnounce.cancel();
       const content = String(rawText != null ? rawText : textRef.current).trim();
       if (!content) {
         notify('请先输入或导入要朗读的文本', 'warning', { say: false });
@@ -292,11 +288,13 @@ export default function App() {
         announcer.announce('synthFailed', {}, { priority: 'high' });
         return;
       }
-      // 不立即播报：700ms 内正文真的响了就视为确认（cue('press') 已给即时反馈），
-      // 只有慢链路（合成慢 / 在线兜底）才补一句「已开始朗读」，证明指令没丢。
-      startAnnounce.arm('start');
+      // v2.4.0：这里**不再播报**「已开始朗读」。
+      // 用户反馈「按热键读文字时不时冒出一句已开始朗读」——根因是本地引擎首句要等
+      // NVSA 模型加载（600~800ms），正好越过原来的 700ms 确认窗口，于是正常路径也会误报。
+      // 判断：正文出声本身就是最好的确认，一句只在「慢的时候」才响的提示 = 纯干扰，直接删除。
+      // 真正的异常仍有出口：合成失败走上面的 synthFailed，无选区/无窗口由主进程播报。
     },
-    [notify, playback, startAnnounce, stopPreview]
+    [notify, playback, stopPreview]
   );
 
   const readRef = useRef(handleRead);
@@ -306,31 +304,27 @@ export default function App() {
   const handlePlay = useCallback(() => {
     announcer.cue('press');
     if (playback.isPlaying) return;
-    // 无音频可播时直接返回：否则 700ms 后仍会念一句「已开始朗读」，而实际什么都没播
-    //（原先它也是立刻念同一句 —— 属等价旧缺陷，这里一并收掉）
+    // 无音频可播时直接返回（播放键会在 UI 上禁用；这里只是防御）
     if (!playback.hasAudio) return;
     playback.play();
-    // 同样是结果性播报：真的续上了就不念「继续朗读」，只在迟迟不出声时补一句
-    startAnnounce.arm('resume');
-  }, [playback, startAnnounce]);
+    // v2.4.0：不再播报「继续朗读」——理由同 handleRead
+  }, [playback]);
 
   const handlePause = useCallback(() => {
     announcer.cue('press');
     if (!playback.isPlaying) return;
-    startAnnounce.cancel(); // 挂了「已开始朗读」还没到点就被暂停，别让它补播
     playback.pause();
     announcer.announce('pause');
-  }, [playback, startAnnounce]);
+  }, [playback]);
 
   const handleStop = useCallback(() => {
     announcer.cue('press');
     if (!playback.hasAudio) return;
-    startAnnounce.cancel(); // 同上：停止后不该再说「已开始朗读」
     manualStopAtRef.current = Date.now();
     playback.stop();
     announcer.reset();
     announcer.announce('stop');
-  }, [playback, startAnnounce]);
+  }, [playback]);
 
   const handlePrev = useCallback(() => {
     announcer.cue('press');
