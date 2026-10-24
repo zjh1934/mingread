@@ -4,6 +4,10 @@
 
 不用复制粘贴，不用切到别的窗口，不用联网。
 
+<p align="center">
+  <img src="screenshots/main.png" width="780" alt="明读主界面：选中文字，按 F1 就朗读">
+</p>
+
 它做的事只有一件：**把你选中的字，读出来。**
 
 | 你想干什么 | 怎么做 |
@@ -88,6 +92,15 @@ node node_modules/electron-builder/out/cli/cli.js --win nsis zip   # 打包
 - 浅色 / 深色 / 高对比度三套主题
 - 所有可点元素 ≥ 44px，键盘全程可达
 - 状态变化有语音播报（可关）
+
+<p align="center">
+  <img src="screenshots/dark.png" width="49%" alt="深色主题">
+  <img src="screenshots/accessibility-2x.png" width="49%" alt="2 倍字号：所有元素等比放大，不破版">
+</p>
+
+<p align="center">
+  <sub>左：深色主题　右：2.0× 字号档（同一界面等比放大，无横向溢出）</sub>
+</p>
 
 ## 许可证
 
