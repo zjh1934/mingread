@@ -21,12 +21,18 @@
 const path = require('path');
 // desktopCapturer 在 Electron 32 里只有主进程能用，由主进程取源、把 id 交给覆盖层去 getUserMedia
 const { BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcut } = require('electron');
+// v2.4.0：系统放大后端。可用时完全替代「覆盖层抓屏 + CSS transform」那条路，
+// 从根上消掉旧方案的画面伪影（焦点框/十字线/描边在 8x 下的网格）。
+const magBackend = require('./zoom/magBackend');
 
 // ---------------------------------------------------------------------------
 // 配置默认值（并入 明读 的 settingsStore 默认值即可）
 // ---------------------------------------------------------------------------
 const ZOOM_DEFAULTS = {
   zoomEnabled: true,        // 总开关
+  // v2.4.0：渲染后端。auto = 优先系统 Magnification API，不可用才回退覆盖层；
+  // overlay = 强制旧方案（QA 与老机器排查用）；mag = 强制新方案（不可用则不放大）
+  zoomBackend: 'auto',
   zoomModifier: 'alt',      // alt | ctrl | win | middle
   zoomFollowMode: 'fixed',  // fixed | centered | push
   zoomMin: 1,               // 回到该值即退出放大
@@ -113,6 +119,10 @@ function createZoomController(opts) {
     _pushOrigin: null,
     displayId: null,        // F3：当前覆盖层所在显示器
     backend: 'none',        // koffi | uiohook | none（原生滚轮钩子）
+    // v2.4.0：渲染后端。mag = 系统 Magnification API（原生窗口，无伪影）；
+    // overlay = 旧覆盖层（抓屏 + CSS transform），仅在 mag 不可用时兜底。
+    // 注意不要和上面的 backend 混用——那个指的是滚轮输入后端。
+    renderBackend: 'overlay',
     trigger: 'none',        // F1：实际生效模式 koffi | uiohook | hotkey | none
     zoomHotkeyOk: false,    // F1：热键模式三键注册结果（失败不抛）
     // α-视觉增强：平移平滑 + 退出动画
@@ -197,13 +207,75 @@ function createZoomController(opts) {
     }
   }
 
+  /**
+   * mag 后端的一帧：把 buildTransform 算出的「不动点 + 倍率」换算成 Mag 需要的源矩形。
+   *
+   * 几何推导（勿随手改）：
+   *   覆盖层的 CSS 语义是 displayed(p) = O + (p - O)·z，O 是屏幕上不动的那个点。
+   *   Mag 要的是「视口覆盖屏幕的哪一块」。视口左上角在显示坐标里是 0，对应源点：
+   *     0 = O + (p0 - O)·z  →  p0 = O·(1 - 1/z)
+   *   视口宽高（源像素）= 屏幕宽高 / z。
+   *
+   * 单位：display.bounds 与 buildTransform 都是 DIP，Mag 要物理像素 → 统一 × scaleFactor；
+   *      但 MagSetWindowTransform 的倍率是「源像素 → 窗口像素」，窗口和源都乘过 sf，
+   *      比值仍是 z，所以这里传 z 而不是 z·sf（这一点在本机 100% 缩放下测不出来，
+   *      如果写成 z·sf，125% 的机器上会放大过头）。
+   */
+  function pushMagFrame(t, display) {
+    const z = t.zoom;
+    if (!(z > 1.0001)) {
+      // 缩回 1x：源矩形就是整屏，倍率 1（等价于未放大，继续显示也无妨）
+      magBackend.showFrame(
+        {
+          left: display.bounds.x * (display.scaleFactor || 1),
+          top: display.bounds.y * (display.scaleFactor || 1),
+          width: display.bounds.width * (display.scaleFactor || 1),
+          height: display.bounds.height * (display.scaleFactor || 1),
+        },
+        1
+      );
+      return;
+    }
+    const sf = display.scaleFactor || 1;
+    const W = display.bounds.width;
+    const H = display.bounds.height;
+    const inv = 1 - 1 / z;
+    const srcX = t.originX * inv;
+    const srcY = t.originY * inv;
+    const srcW = W / z;
+    const srcH = H / z;
+    magBackend.showFrame(
+      {
+        left: (display.bounds.x + srcX) * sf,
+        top: (display.bounds.y + srcY) * sf,
+        width: srcW * sf,
+        height: srcH * sf,
+      },
+      z
+    );
+  }
+
   function pushState() {
-    if (!overlay || overlay.isDestroyed()) return;
+    let d = null;
     try {
-      const d = screen.getDisplayNearestPoint(state.cursor);
-      overlay.webContents.send('zoom:state', buildTransform(d));
+      d = screen.getDisplayNearestPoint(state.cursor);
     } catch (e) {
-      /* 屏幕枚举失败时本帧丢弃 */
+      return; // 屏幕枚举失败时本帧丢弃
+    }
+    const t = buildTransform(d);
+
+    // mag 后端：原生窗口每帧更新源矩形
+    if (state.renderBackend === 'mag') {
+      pushMagFrame(t, d);
+    }
+
+    // 覆盖层（旧方案 / mag 不可用时的兜底）
+    if (overlay && !overlay.isDestroyed()) {
+      try {
+        overlay.webContents.send('zoom:state', t);
+      } catch (e) {
+        /* noop */
+      }
     }
   }
 
@@ -314,9 +386,50 @@ function createZoomController(opts) {
     state.panY = 0;
     state.exiting = false;
     state.lastStepAt = Date.now();
-    showOverlayForCurrentDisplay();
+    // v2.4.0：优先系统放大后端（原生窗口直接输出源像素，无自绘伪影）；
+    // 不可用（DLL 缺失 / 用户强制旧方案）时才建覆盖层。
+    if (useMagBackend()) {
+      state.renderBackend = 'mag';
+    } else {
+      state.renderBackend = 'overlay';
+      showOverlayForCurrentDisplay();
+    }
     sendActivate(); // F10
     notifyRenderer();
+  }
+
+  /** 尝试切到系统放大后端。返回 false 时调用方回退覆盖层。
+   *  懒探测：放在首次激活时而不是启动时，避免为一个可能用不到的能力拖慢首屏。 */
+  function useMagBackend() {
+    const s = getSettings();
+    // QA / 排查用：MINGREAD_ZOOM_BACKEND=overlay 可强制回退旧方案，
+    // 用来确认「mag 不可用的机器上放大仍然可用」这条兜底路径没坏。
+    if (process.env.MINGREAD_ZOOM_BACKEND === 'overlay') {
+      console.log('[zoom] renderBackend=overlay（环境变量强制）');
+      return false;
+    }
+    if (s.zoomBackend === 'overlay') {
+      console.log('[zoom] renderBackend=overlay（设置里强制旧方案）');
+      return false;
+    }
+    if (!magBackend.isAvailable()) {
+      const info = magBackend.getInfo();
+      console.warn(`[zoom] mag 不可用，回退覆盖层：${info.reason || '未知原因'}`);
+      return false;
+    }
+    try {
+      const d = screen.getDisplayNearestPoint(state.cursor);
+      if (!magBackend.createForDisplay(d)) {
+        console.warn(`[zoom] mag 建窗失败，回退覆盖层：${magBackend.getInfo().reason || ''}`);
+        return false;
+      }
+      state.displayId = d.id;
+      console.log(`[zoom] renderBackend=mag display=${d.id}`);
+      return true;
+    } catch (e) {
+      console.warn('[zoom] mag 启动异常，回退覆盖层：', e && e.message);
+      return false;
+    }
   }
 
   function showOverlayForCurrentDisplay() {
@@ -339,6 +452,14 @@ function createZoomController(opts) {
     state.panX = 0;
     state.panY = 0;
     state.exiting = false;
+    // mag 后端：收起原生放大窗口（不销毁，下次激活复用，避免反复建窗）
+    if (state.renderBackend === 'mag') {
+      try {
+        magBackend.hide();
+      } catch (e) {
+        /* noop */
+      }
+    }
     // 通知覆盖层停掉屏幕捕获流（省电，避免隐藏窗口继续录屏）
     if (overlay && !overlay.isDestroyed() && overlayReady) {
       try {
@@ -546,6 +667,20 @@ function createZoomController(opts) {
         }
         if (d && d.id !== state.displayId) {
           state.displayId = d.id;
+          // mag 的源矩形不能跨屏 → 换屏必须重建宿主窗口；建不出来就退回覆盖层
+          if (state.renderBackend === 'mag') {
+            try {
+              if (!magBackend.createForDisplay(d)) {
+                console.warn('[zoom] 换屏后 mag 重建失败，回退覆盖层');
+                state.renderBackend = 'overlay';
+                showOverlayForCurrentDisplay();
+              }
+            } catch (e) {
+              console.warn('[zoom] 换屏重建 mag 异常，回退覆盖层：', e && e.message);
+              state.renderBackend = 'overlay';
+              showOverlayForCurrentDisplay();
+            }
+          }
           if (overlay && !overlay.isDestroyed()) {
             try {
               overlay.setBounds({ x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height });
@@ -835,6 +970,14 @@ function createZoomController(opts) {
     if (overlay && !overlay.isDestroyed()) overlay.destroy();
     overlay = null;
     overlayReady = false;
+    // mag 后端的原生窗口与 MagUninitialize 必须在这里收干净，
+    // 否则退出后系统可能残留置顶窗口（覆盖整个桌面且鼠标穿透，用户会以为死机）
+    try {
+      magBackend.dispose();
+    } catch (e) {
+      console.warn('[zoom] mag dispose failed:', e && e.message);
+    }
+    state.renderBackend = 'overlay';
     state.backend = 'none';
     state.trigger = 'none';
   }
