@@ -19,3 +19,6 @@ app/release*/
 # 微软系统组件调试副本（不随应用分发，见 electron-builder.yml 的排除项）
 app/resources/magnification/
 app/scripts/probe-mag-live-out/
+
+# 内部参考：含旧版商业软件源码与设计资料，不随仓库开源（历史已重写剔除）
+reference/
