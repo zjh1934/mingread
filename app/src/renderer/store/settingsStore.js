@@ -35,6 +35,9 @@ export const useSettings = create(
 
       // ---- 系统设置（主进程权威，仅运行时同步，不持久化）----
       hotkey: 'F1',
+  // v3.2 朗读方式（二选一）：hotkey 选中后按热键 | hover 指针停在文字上自动读
+  readMode: 'hotkey',
+  hoverDelayMs: 650,
       clipboardAuto: true,
       // v2.4.0：按热键的「滴」提示音，默认关（用户反馈没必要）
       hotkeyCue: false,
@@ -55,6 +58,8 @@ export const useSettings = create(
         if (typeof s.hotkeyCue === 'boolean') patch.hotkeyCue = s.hotkeyCue;
         if (typeof s.floatBallEnabled === 'boolean') patch.floatBallEnabled = s.floatBallEnabled;
         if (typeof s.hotkeyOk === 'boolean') patch.hotkeyOk = s.hotkeyOk;
+        if (s.readMode === 'hover' || s.readMode === 'hotkey') patch.readMode = s.readMode;
+        if (typeof s.hoverDelayMs === 'number') patch.hoverDelayMs = s.hoverDelayMs;
         if (Object.keys(patch).length) set(patch);
       },
 

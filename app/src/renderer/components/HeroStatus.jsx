@@ -16,8 +16,17 @@ import { fs, su } from '../theme';
 /**
  * @param {{hotkey?:string, hotkeyOk?:boolean, voiceName?:string, engineLabel?:string}} props
  */
-export default function HeroStatus({ hotkey = 'F1', hotkeyOk = true, voiceName = '', engineLabel = '' }) {
-  const ok = hotkeyOk !== false;
+export default function HeroStatus({
+  hotkey = 'F1',
+  hotkeyOk = true,
+  voiceName = '',
+  engineLabel = '',
+  // v3.2 朗读方式：热键 / 悬停。首屏第一句话必须说清「现在怎么读」，
+  // 否则用户切到悬停后仍会去按热键、按了没反应又不知道为什么。
+  mode = 'hotkey',
+}) {
+  const hover = mode === 'hover';
+  const ok = hover ? true : hotkeyOk !== false;
   const accent = ok ? 'primary.main' : 'error.main';
 
   return (
@@ -46,7 +55,11 @@ export default function HeroStatus({ hotkey = 'F1', hotkeyOk = true, voiceName =
               wordBreak: 'break-word',
             }}
           >
-            {ok ? `选中文字，按 ${hotkey} 就朗读` : `${hotkey} 被其他程序占用`}
+            {hover
+              ? '鼠标停在文字上，就朗读'
+              : ok
+                ? `选中文字，按 ${hotkey} 就朗读`
+                : `${hotkey} 被其他程序占用`}
           </Typography>
 
           <Stack
@@ -57,7 +70,7 @@ export default function HeroStatus({ hotkey = 'F1', hotkeyOk = true, voiceName =
           >
             <Chip
               size="small"
-              label={ok ? '热键就绪' : '热键不可用'}
+              label={hover ? '悬停就绪' : ok ? '热键就绪' : '热键不可用'}
               color={ok ? 'success' : 'error'}
               variant="outlined"
               sx={{ height: su(24), fontWeight: 700 }}
@@ -69,7 +82,7 @@ export default function HeroStatus({ hotkey = 'F1', hotkeyOk = true, voiceName =
             )}
             {ok && (
               <Typography sx={{ fontSize: fs(14), color: 'text.secondary' }}>
-                · 不用切回这个窗口
+                {hover ? '· 停住约 0.7 秒，不用选中' : '· 不用切回这个窗口'}
               </Typography>
             )}
           </Stack>

@@ -154,6 +154,12 @@ const api = {
     ipcRenderer.on('hotkey:read-selection', listener);
     return () => ipcRenderer.removeListener('hotkey:read-selection', listener);
   },
+  /** v3.2 悬停朗读命中文本：{text, meta:{x,y,lines,ocrMs,totalMs}} */
+  onHoverRead: (cb) => {
+    const listener = (_e, payload) => cb(payload);
+    ipcRenderer.on('hover:read', listener);
+    return () => ipcRenderer.removeListener('hover:read', listener);
+  },
   onReadClipboard: (cb) => {
     const l = () => cb();
     ipcRenderer.on('hotkey:read-clipboard', l);

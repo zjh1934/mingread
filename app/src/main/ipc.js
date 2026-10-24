@@ -15,6 +15,7 @@ const { startClipboardMonitor } = require('./clipboardMonitor');
 const floatBall = require('./floatBall');
 const zoomController = require('./zoomController');
 const cursorSize = require('./cursorSize');
+const hoverService = require('./hover');
 
 function b64(u8) {
   return Buffer.from(u8).toString('base64');
@@ -70,6 +71,9 @@ function systemSettingsSnapshot() {
     // α-视觉增强（低视力）：字号档位与悬浮球尺寸，权威源同样在 settings.json
     fontScale: Number(s.fontScale) || 1,
     floatBallSize: Number(s.floatBallSize) || 56,
+    // v3.2 朗读方式（二选一）
+    readMode: s.readMode === 'hover' ? 'hover' : 'hotkey',
+    hoverDelayMs: Number(s.hoverDelayMs) || 650,
   };
 }
 
@@ -125,6 +129,16 @@ function saveSystemSettings(patch) {
       _state.clipboardAuto = !!p.clipboardAuto;
       persist.clipboardAuto = _state.clipboardAuto;
       applyClipboardAuto(_state.clipboardAuto);
+    }
+    // v3.2 朗读方式二选一：切换时立刻生效（启动/停止悬停检测），并持久化
+    if ('readMode' in p) {
+      const mode = p.readMode === 'hover' ? 'hover' : 'hotkey';
+      persist.readMode = mode;
+      hoverService.setMode(mode);
+    }
+    if ('hoverDelayMs' in p) {
+      const v = Math.max(200, Math.min(3000, Number(p.hoverDelayMs) || 650));
+      persist.hoverDelayMs = v;
     }
     if ('floatBallEnabled' in p) {
       persist.floatBallEnabled = !!p.floatBallEnabled;

@@ -59,7 +59,7 @@ function trayIcon() {
  * @param {() => string} getHotkey 例如 'Ctrl+Alt+R'
  * @param {() => void} [toggleFloatBall] 显示/隐藏悬浮球（由 index.js 注入 floatBall.toggle）
  */
-function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow) {
+function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow, getReadMode) {
   let tray = null;
   let busy = false;
   let registered = false;
@@ -139,6 +139,17 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow)
 
   async function triggerSelectionRead() {
     const t0 = Date.now();
+    // v3.2 两种朗读方式严格二选一：悬停模式下热键不再抓选区。
+    // 但不能静默——「按了没反应」是这个项目反复踩过的坑（用户原话：
+    // 「选中按热键它不会出来，就低一下，也不说一下」），所以这里主动播报当前模式。
+    if (typeof getReadMode === 'function' && getReadMode() === 'hover') {
+      a11y.announce({
+        text: '现在是鼠标悬停朗读，把指针停在文字上就会读，不用按热键。想用热键请到设置里切换。',
+        priority: 'normal',
+      });
+      console.log('[hotkey] skipped: readMode=hover');
+      return;
+    }
     // 指标 E：用户按下的瞬间就有反馈音，之后才做可能耗时几百毫秒的抓选区
     firePressCue(t0);
     if (busy) {

@@ -31,6 +31,7 @@ import HeroStatus from './components/HeroStatus';
 // v2.4.0 首屏补白：快捷键速查卡（默认收起一行，展开为热键表）
 import ShortcutGuide from './components/ShortcutGuide';
 import SupportCard from './components/SupportCard';
+import ReadModeSwitch from './components/ReadModeSwitch';
 
 const SAMPLE_TEXT =
   '明读 是面向低视力人群的无障碍辅助工具：屏幕放大、高对比度、把看不清的文字读出来。\n\n语音默认走本地 NVSA（离线、百毫秒级），不可用时自动回落到微软 Edge 在线神经语音（晓晓 / 云希）。\n\n在任意程序里选中文字后按 F1，可以直接朗读选中的内容，不会覆盖这里的文本。';
@@ -51,6 +52,8 @@ export default function App() {
   const pitch = useSettings((s) => s.pitch);
   const volume = useSettings((s) => s.volume);
   const hotkey = useSettings((s) => s.hotkey);
+  // v3.2 朗读方式（二选一）。首屏文案与切换器都跟着它变。
+  const readMode = useSettings((s) => s.readMode) || 'hotkey';
   const hotkeyOk = useSettings((s) => s.hotkeyOk);
 
   const [text, setText] = useState(SAMPLE_TEXT);
@@ -423,6 +426,7 @@ export default function App() {
     let offSelection;
     let offClipboard;
     let offHotkeyClip;
+    let offHover;
     try {
       offSelection = api.onReadSelection?.((payload) => {
         // 反馈音由主进程各入口（热键 / 悬浮球）统一负责，此处不再重复 cue，
@@ -442,6 +446,13 @@ export default function App() {
           announcer.announce('readClipboard', {}, { priority: 'high' });
         }
         readRef.current(content, { fromSelection: true });
+      });
+      // v3.2 悬停朗读：主进程 OCR 命中的文本直接送进来。
+      // 不走 onReadSelection，是因为悬停没有"选区"语义（不涉及剪贴板、不需要 fromSelection）。
+      offHover = api.onHoverRead?.((payload) => {
+        const t = payload && payload.text ? String(payload.text).trim() : '';
+        if (!t) return;
+        readRef.current(t);
       });
       offClipboard = api.onClipboard?.((payload) => {
         const t = payload && payload.text;
@@ -468,6 +479,7 @@ export default function App() {
     }
     return () => {
       if (typeof offSelection === 'function') offSelection();
+      if (typeof offHover === 'function') offHover();
       if (typeof offClipboard === 'function') offClipboard();
       if (typeof offHotkeyClip === 'function') offHotkeyClip();
     };
@@ -772,7 +784,15 @@ export default function App() {
           <VoiceDeployGate />
 
           {/* ① v2.4.0 首屏状态卡：主用法「选中→F1」必须在第一眼位置 */}
-          <HeroStatus hotkey={hotkey || 'F1'} hotkeyOk={hotkeyOk} voiceName={heroVoiceName} />
+          <HeroStatus
+            hotkey={hotkey || 'F1'}
+            hotkeyOk={hotkeyOk}
+            voiceName={heroVoiceName}
+            mode={readMode}
+          />
+
+          {/* ①.5 朗读方式二选一：必须在首页能直接切，不能藏进设置 */}
+          <ReadModeSwitch />
 
           {/* ② 播放器：只有真的在朗读 / 点过朗读时才占主位；否则给一行轻量入口 */}
           {playerActive ? (

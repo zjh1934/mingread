@@ -70,6 +70,7 @@ const { registerHotkeyTray } = require('./hotkeyTray');
 // v2.4.0 延迟优化：常驻 PowerShell 抓取通道（划词抓取 771ms → 稳态 33ms 的关键）
 const { initCaptureHost } = require('./platform/captureHost');
 const settingsStore = require('./settingsStore');
+const hoverService = require('./hover');
 const floatBall = require('./floatBall');
 const { warmupVoiceSetup } = require('./voiceSetup');
 const { createZoomController } = require('./zoomController');
@@ -548,8 +549,12 @@ function bootstrap() {
       getMainWindow,
       () => state.hotkey,
       () => floatBall.toggle(),
-      ensureWindow // 托盘点击/显示主窗口时兜底重建，避免窗口销毁后永久点不开
+      ensureWindow, // 托盘点击/显示主窗口时兜底重建，避免窗口销毁后永久点不开
+      () => hoverService.getMode() // 悬停模式下热键不抓选区（二选一）
     );
+    // v3.2 悬停朗读：先 init 注入依赖，再按当前设置切模式（hover 才启动 OCR 宿主）
+    hoverService.init(getMainWindow, () => !!(state.playback && state.playback.isPlaying));
+    hoverService.setMode(initialSettings.readMode === 'hover' ? 'hover' : 'hotkey');
     state.hotkeyRef = hotkeyRef;
     state.hotkeyOk = !!(hotkeyRef && typeof hotkeyRef.isRegistered === 'function' && hotkeyRef.isRegistered());
     // v2.4.0：预热抓取宿主。冷启动实测 0.9~1.1s；不预热则首次按 F1 要吃「宿主启动 + 超时」
@@ -591,6 +596,9 @@ function bootstrap() {
   });
 
   app.on('before-quit', () => {
+    try {
+      hoverService.dispose(); // 收掉常驻 OCR 进程，别留孤儿
+    } catch (e) { /* 退出路径不抛 */ }
     // 放行 close 拦截：只有从这里开始的关闭才是「真退出」
     state.quitting = true;
     if (state.stopClipboard) {
