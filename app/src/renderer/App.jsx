@@ -302,6 +302,12 @@ export default function App() {
   );
 
   const readRef = useRef(handleRead);
+  // 悬停回调注册在 useEffect 里，闭包会捕获旧的 playback；
+  // 用 ref 拿最新值，否则「暂停中」的判断会永远用挂载那一刻的状态。
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
+  // 悬停因「正在收听长文」被跳过时只提示一次，避免每次悬停都念一遍
+  const hoverSkipAnnouncedRef = useRef(false);
   readRef.current = handleRead;
 
   // 播放控制：先出反馈音（让用户知道指令已收到），再播报新状态
@@ -452,6 +458,24 @@ export default function App() {
       offHover = api.onHoverRead?.((payload) => {
         const t = payload && payload.text ? String(payload.text).trim() : '';
         if (!t) return;
+        // 审查发现（E-02）：暂停听长文时把鼠标停在任意文字上，悬停会直接 start()，
+        // 把整本书的阅读进度和缓存清空去读那一小段，而且没有任何提示。
+        // 主进程的 isBusy 只看 isPlaying，暂停态和合成态都是 false，拦不住。
+        // 这里补一道：有音频但没在播 → 不打断，只提示一次。
+        const pb = playbackRef.current || {};
+        if (pb.hasAudio && !pb.isPlaying) {
+          if (!hoverSkipAnnouncedRef.current) {
+            hoverSkipAnnouncedRef.current = true;
+            notify('正在收听长文，悬停朗读已跳过。想读屏幕上的文字，先点停止。', 'info', {
+              say: false,
+              duration: 5000,
+            });
+            announcer.say('hoverSkipped', '正在收听长文，悬停朗读已跳过。');
+          }
+          return;
+        }
+        // 音频播完后复位提示锁，下次重新计
+        if (!pb.hasAudio) hoverSkipAnnouncedRef.current = false;
         readRef.current(t);
       });
       offClipboard = api.onClipboard?.((payload) => {

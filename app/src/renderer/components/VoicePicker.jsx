@@ -135,7 +135,10 @@ function VoiceRow({ voice, selected, previewing, onChange, onPreview }) {
  * @param {boolean} inline 内嵌模式：去掉固定宽度与标题（外层已经有分区标题）
  */
 export default function VoicePicker({ status, value, onChange, onPreview, previewingId, inline }) {
-  const voices = (status.voices && status.voices.length ? status.voices : FALLBACK_VOICES).slice(0, 2);
+  // 审查发现（G-02）：这里原来硬编码 .slice(0, 2)，只显示前两个音色。
+  // 后果是「音色源」功能白做——用户自己从源里装的发音人根本选不到。
+  // 现在改成全部列出，列表限高可滚（音色多了不能把气泡撑爆）。
+  const voices = status.voices && status.voices.length ? status.voices : FALLBACK_VOICES;
 
   return (
     <Box
@@ -156,7 +159,13 @@ export default function VoicePicker({ status, value, onChange, onPreview, previe
         </Stack>
       )}
 
-      <Stack spacing={1} role="group" aria-label="音色选择">
+      <Stack
+        spacing={1}
+        role="group"
+        aria-label="音色选择"
+        data-scroll="1"
+        sx={{ maxHeight: su(280), overflowY: 'auto', pr: 0.25 }}
+      >
         {voices.map((v) => (
           <VoiceRow
             key={v.id}
@@ -170,6 +179,7 @@ export default function VoicePicker({ status, value, onChange, onPreview, previe
       </Stack>
 
       <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>
+        {voices.length > 2 ? `共 ${voices.length} 个音色，列表可滚动。` : ''}
         点击选用，试听不改变当前选择
       </Typography>
     </Box>

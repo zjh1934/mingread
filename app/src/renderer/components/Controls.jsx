@@ -176,6 +176,7 @@ export default function Controls({
       {/* 大字当前句：主界面的视觉锚点 */}
       <Box
         aria-label={current ? `当前第 ${currentSentence + 1} 句：${current.text}` : '当前句'}
+        data-scroll="1"
         sx={{
           minHeight: su(108),
           maxHeight: su(216),
@@ -390,6 +391,9 @@ export default function Controls({
           sx={{
             borderRadius: 1,
             px: 1,
+            // 无障碍红线：可点目标 ≥44px。原来只有 py:0.5（约 32px 高），
+            // 低视力用户手指/视线都难以稳定命中。
+            minHeight: su(44),
             py: 0.5,
             color: 'text.secondary',
             '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
@@ -411,6 +415,7 @@ export default function Controls({
 
         <Collapse in={listOpen} unmountOnExit>
           <Box
+            data-scroll="1"
             sx={{
               mt: 0.75,
               maxHeight: su(200),

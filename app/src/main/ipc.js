@@ -75,6 +75,7 @@ function systemSettingsSnapshot() {
     readMode: s.readMode === 'hover' ? 'hover' : 'hotkey',
     hoverDelayMs: Number(s.hoverDelayMs) || 650,
     hoverDetail: s.hoverDetail === 'low' || s.hoverDetail === 'high' ? s.hoverDetail : 'medium',
+    hotkeyCue: s.hotkeyCue === true,
   };
 }
 
@@ -132,6 +133,12 @@ function saveSystemSettings(patch) {
       applyClipboardAuto(_state.clipboardAuto);
     }
     // v3.2 朗读方式二选一：切换时立刻生效（启动/停止悬停检测），并持久化
+    // v3.2.2 修复「热键提示音是假开关」：
+    // 开关在渲染层、读取在 hotkeyTray（从 settings.json 读），但保存白名单漏了这一项，
+    // 导致「界面显示已开启 → 实际不响 → 重启又关回去」。
+    if ('hotkeyCue' in p) {
+      persist.hotkeyCue = !!p.hotkeyCue;
+    }
     if ('readMode' in p) {
       const mode = p.readMode === 'hover' ? 'hover' : 'hotkey';
       persist.readMode = mode;

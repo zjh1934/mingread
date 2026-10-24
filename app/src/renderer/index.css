@@ -146,6 +146,18 @@ html[data-font-scale='2'] .MuiBox-root {
   min-height: 0 !important;
 }
 
+/* 例外：显式标记 data-scroll 的「限高 + 内部滚动」容器（当前句 / 句列表 / 章节 / 关于页）。
+   上面那条 overflow:visible 是为了解决大字号下固定高度把内容裁掉，
+   但如果无差别应用，会把「限高 + 滚动」变成「限高 + 溢出」——
+   内容直接叠到下面的卡片上，对**必须用大字号**的用户等于看不清。
+   这类容器要保留自己的滚动条，不能跟着放开。 */
+html[data-font-scale='1.5'] .MuiBox-root[data-scroll='1'],
+html[data-font-scale='2'] .MuiBox-root[data-scroll='1'],
+html[data-font-scale='1.5'] [data-scroll='1'],
+html[data-font-scale='2'] [data-scroll='1'] {
+  overflow: auto !important;
+}
+
 html[data-font-scale='1.5'] body > #root > .MuiBox-root,
 html[data-font-scale='2'] body > #root > .MuiBox-root {
   min-height: 100vh !important;

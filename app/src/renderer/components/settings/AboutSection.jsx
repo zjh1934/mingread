@@ -74,7 +74,7 @@ function HistoryPanel() {
           暂无记录
         </Typography>
       ) : (
-        <Stack spacing={1} sx={{ mt: 1.25, maxHeight: su(320), overflowY: 'auto', pr: 0.5 }}>
+        <Stack spacing={1} data-scroll="1" sx={{ mt: 1.25, maxHeight: su(320), overflowY: 'auto', pr: 0.5 }}>
           {items.map((it) => (
             <Box
               key={it.id}

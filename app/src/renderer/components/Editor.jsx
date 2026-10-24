@@ -109,7 +109,7 @@ export default function Editor({
                   全书
                 </Button>
               </Stack>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxHeight: su(96), overflowY: 'auto' }}>
+              <Box data-scroll="1" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxHeight: su(96), overflowY: 'auto' }}>
                 {chapters.map((c, i) => (
                   <Chip
                     key={`${c.title}-${i}`}

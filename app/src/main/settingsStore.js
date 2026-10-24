@@ -10,8 +10,10 @@
 const fs = require('fs');
 const path = require('path');
 const C = require('../shared/constants');
-// v2.3 屏幕缩放（LensZoom 集成）：默认值从 zoomController 引入，保持单一来源
-const { ZOOM_DEFAULTS } = require('./zoomController');
+// v2.3 屏幕缩放默认值：从 shared/zoomDefaults 引入（单一来源）。
+// 注意不要改回 require('./zoomController')：那会让设置层反向依赖控制器，
+// 与 zoomController → a11yFeedback → ttsBridge → … → settingsStore 组成循环依赖。
+const { ZOOM_DEFAULTS } = require('../shared/zoomDefaults');
 
 let _settingsPath = null;
 
