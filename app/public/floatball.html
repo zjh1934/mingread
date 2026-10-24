@@ -345,6 +345,9 @@
       { label: '隐藏悬浮球', cmd: 'hide' },
     ];
     var menuEl = null;
+    // 菜单是否展开：主进程据此把球窗口临时切成可聚焦（否则 blur / Esc 永远收不到），
+    // 关菜单时同一通道把 focusable 收回 false。与 menuEl 同步维护。
+    var menuShowing = false;
 
     function sendCmd(cmd) {
       try {
@@ -374,13 +377,16 @@
     }
 
     function closeMenu() {
+      if (!menuShowing && !menuEl) return; // 幂等：没开就不要重复通知主进程
       if (menuEl) {
         menuEl.remove();
         menuEl = null;
       }
+      menuShowing = false;
       document.removeEventListener('mousedown', onDocDown, true);
       document.removeEventListener('keydown', onDocKey, true);
       window.removeEventListener('blur', closeMenu);
+      // 通知主进程：收回窗口尺寸 + 立刻恢复 focusable:false（把焦点还给用户原窗口）
       hintMenuResize(false, 0, 0);
     }
 
@@ -399,8 +405,10 @@
         btn.textContent = item.label;
         btn.addEventListener('click', function (e) {
           e.stopPropagation();
-          sendCmd(item.cmd);
+          // 先关菜单、再发指令：主进程收到 menu:false 会马上 focusable:false 并把前台
+          // 还给用户原来的程序，紧接着的「朗读选中文字」才有正确的 Ctrl+C 目标。
           closeMenu();
+          sendCmd(item.cmd);
         });
         menu.appendChild(btn);
       });
@@ -412,8 +420,10 @@
       menu.style.left = px + 'px';
       menu.style.top = py + 'px';
       menuEl = menu;
+      menuShowing = true;
       document.addEventListener('mousedown', onDocDown, true);
       document.addEventListener('keydown', onDocKey, true);
+      // 主进程扩窗后球窗口才可聚焦，这条 blur 才真正会触发（点桌面/别的程序 → 收菜单）
       window.addEventListener('blur', closeMenu);
       hintMenuResize(true, Math.ceil(rect.width), Math.ceil(rect.height));
     }

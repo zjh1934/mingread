@@ -1,0 +1,17 @@
+W-FIX2 首次启动闪烁探针
+electron=32.3.3 chrome=128.0.6613.186
+backgroundColor=#f5f6fa show=false
+
+timeline(ms since whenReady):
+  0	whenReady
+  83	window-created
+  99	did-start-loading
+  3356	dom-ready
+  3356	did-finish-load
+  4308	ready-to-show
+  4328	show
+
+firstVisible center=#f5f6fa luma=246
+postShow samples=#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa,#f5f6fa
+checks={"showFalseInitially":true,"bgNotDarkLiteral":true,"bgMatchesLightTheme":true,"hiddenUntilReadyToShow":true,"readyToShowArrived":true,"showDelayMs":20,"firstFrameNotDark":true,"firstFrameIsLightThemeBg":true,"noDarkFrameAfterShow":true,"reactMountedAfterShow":true,"skeletonRemoved":true,"didFinishLoadSeen":true,"skeletonPaintedInGap":true,"skeletonCaptureBeforeBundle":true,"skeletonHasTextPixels":true,"skeletonRemovedAfterMount":true,"skeletonFrameNotDark":true}
+ok=true

@@ -58,13 +58,40 @@ function getMainWindow() {
   return mainWindow;
 }
 
+// ---------------------------------------------------------------------------
+// WFIX2 启动显隐：历史 bug —— backgroundColor 写死深色 '#0f1115' 且窗口创建即显示，
+// 用户先看到深色底，渲染层浅色主题生效后变白，观感是「黑屏 → 白屏」闪烁。
+// 修法：① show:false，ready-to-show 之后再 show（首帧已绘制，无「底色 → 内容」跳变）；
+//       ② 底色与 src/renderer/theme.js 的 background.default 对齐；
+//       ③ 5s 兜底强制 show（加载卡死时不能让用户以为程序没启动）。
+// 说明：themeMode 存在渲染层 localStorage，主进程读不到；settingsStore 里只有 theme，
+//       读不到就按浅色（渲染层默认主题 light）。
+// ---------------------------------------------------------------------------
+const STARTUP_BG = { light: '#f5f6fa', dark: '#0c0f16', hc: '#000000' };
+const SHOW_FALLBACK_MS = 5000;
+let bootT0 = 0;
+
+function resolveStartupBackground() {
+  try {
+    const s = settingsStore.getSettings();
+    const mode = s && (s.themeMode || s.theme);
+    if (mode === 'dark') return STARTUP_BG.dark;
+    if (mode === 'hc') return STARTUP_BG.hc;
+  } catch (e) {
+    /* 读不到按浅色 */
+  }
+  return STARTUP_BG.light;
+}
+
 function createWindow() {
+  const startupBg = resolveStartupBackground();
   const win = new BrowserWindow({
     width: 1180,
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#0f1115',
+    backgroundColor: startupBg,
+    show: false,
     title: '朗读女 Neo',
     icon: ICON_PATH ? nativeImage.createFromPath(ICON_PATH) : undefined,
     webPreferences: {
@@ -75,6 +102,24 @@ function createWindow() {
     },
   });
   mainWindow = win;
+
+  // WFIX2：先隐藏后显示。ready-to-show 表示首帧已绘制，此时 show() 用户不会看到底色闪变；
+  // 5s 内没等到（加载失败/卡住）也强制显示，否则用户会以为程序没启动。
+  let revealed = false;
+  let revealTimer = null;
+  const reveal = (reason) => {
+    if (revealed || win.isDestroyed()) return;
+    revealed = true;
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+    win.show();
+    console.log(`[boot] window shown (${reason}) +${bootT0 ? Date.now() - bootT0 : 0}ms bg=${startupBg}`);
+  };
+  revealTimer = setTimeout(() => reveal('timeout'), SHOW_FALLBACK_MS);
+  if (typeof revealTimer.unref === 'function') revealTimer.unref();
+  win.once('ready-to-show', () => reveal('ready-to-show'));
 
   // 渲染层 hydrate：主窗口首次加载完成后推送一次系统设置；之后每次变化由 ipc.js 广播
   win.webContents.once('did-finish-load', () => {
@@ -111,6 +156,7 @@ function createWindow() {
         }, 1200);
         setTimeout(async () => {
           try {
+            if (!win.isVisible()) reveal('playcapture-before-shot');
             const img = await win.webContents.capturePage();
             fs.writeFileSync(playPath, img.toPNG());
             console.log('[playcapture] saved', playPath);
@@ -131,6 +177,8 @@ function createWindow() {
       const capScale = scaleArg ? Number(scaleArg.split('=')[1]) || 1 : 1;
       setTimeout(async () => {
         try {
+          // WFIX2：窗口在 ready-to-show 前是隐藏的，隐藏窗口截不出真实帧 → 截图前先确保已显示
+          if (!win.isVisible()) reveal('capture-before-shot');
           if (capScale !== 1) {
             await win.webContents.executeJavaScript(
               `document.documentElement.style.fontSize='${16 * capScale}px';` +
@@ -176,6 +224,10 @@ function createWindow() {
   }
 
   win.on('closed', () => {
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
     mainWindow = null;
   });
   return win;
@@ -195,6 +247,7 @@ function bootstrap() {
   });
 
   app.whenReady().then(() => {
+    bootT0 = Date.now(); // WFIX2：启动时间线基准（窗口显示日志以此为零点）
     try {
       getBridge();
     } catch (e) {

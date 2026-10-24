@@ -12,6 +12,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 
 import { useSettings } from './store/settingsStore';
 import { useStreamingPlayback } from './hooks/useStreamingPlayback';
+import { useDelayedAnnounce } from './hooks/useDelayedAnnounce';
 import { useTts } from './hooks/useTts';
 import announcer from './services/announcer';
 import { fs, su } from './theme'; // α：px → rem/calc(px*scale)，随字号档位缩放
@@ -101,6 +102,10 @@ export default function App() {
     onNotice: (msg) => notify(msg, 'info'),
   });
   const { exporting, preview, exportAudio } = useTts();
+
+  // 「开始 / 继续朗读」这类结果性播报改为延迟确认：700ms 内真的出声就不播，
+  // 免得本地引擎 150ms 出声时「已开始朗读」和正文抢同一个喇叭。
+  const startAnnounce = useDelayedAnnounce({ isPlaying: playback.isPlaying });
 
   // 语音状态：启动读取一次 + 订阅主进程变化
   useEffect(() => {
@@ -264,6 +269,8 @@ export default function App() {
 
   const handleRead = useCallback(
     async (rawText, options = {}) => {
+      // 新一轮朗读：先作废上一次还没到点的「已开始朗读」，否则它会在这次朗读中途冒出来
+      startAnnounce.cancel();
       const content = String(rawText != null ? rawText : textRef.current).trim();
       if (!content) {
         notify('请先输入或导入要朗读的文本', 'warning', { say: false });
@@ -285,10 +292,11 @@ export default function App() {
         announcer.announce('synthFailed', {}, { priority: 'high' });
         return;
       }
-      // 立即播报「已开始朗读」：不必等第一句出声，用户才知道指令生效了
-      announcer.announce('start');
+      // 不立即播报：700ms 内正文真的响了就视为确认（cue('press') 已给即时反馈），
+      // 只有慢链路（合成慢 / 在线兜底）才补一句「已开始朗读」，证明指令没丢。
+      startAnnounce.arm('start');
     },
-    [notify, playback, stopPreview]
+    [notify, playback, startAnnounce, stopPreview]
   );
 
   const readRef = useRef(handleRead);
@@ -298,26 +306,31 @@ export default function App() {
   const handlePlay = useCallback(() => {
     announcer.cue('press');
     if (playback.isPlaying) return;
-    const resuming = !!playback.hasAudio;
+    // 无音频可播时直接返回：否则 700ms 后仍会念一句「已开始朗读」，而实际什么都没播
+    //（原先它也是立刻念同一句 —— 属等价旧缺陷，这里一并收掉）
+    if (!playback.hasAudio) return;
     playback.play();
-    announcer.announce(resuming ? 'resume' : 'start');
-  }, [playback]);
+    // 同样是结果性播报：真的续上了就不念「继续朗读」，只在迟迟不出声时补一句
+    startAnnounce.arm('resume');
+  }, [playback, startAnnounce]);
 
   const handlePause = useCallback(() => {
     announcer.cue('press');
     if (!playback.isPlaying) return;
+    startAnnounce.cancel(); // 挂了「已开始朗读」还没到点就被暂停，别让它补播
     playback.pause();
     announcer.announce('pause');
-  }, [playback]);
+  }, [playback, startAnnounce]);
 
   const handleStop = useCallback(() => {
     announcer.cue('press');
     if (!playback.hasAudio) return;
+    startAnnounce.cancel(); // 同上：停止后不该再说「已开始朗读」
     manualStopAtRef.current = Date.now();
     playback.stop();
     announcer.reset();
     announcer.announce('stop');
-  }, [playback]);
+  }, [playback, startAnnounce]);
 
   const handlePrev = useCallback(() => {
     announcer.cue('press');

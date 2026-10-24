@@ -1,5 +1,7 @@
 // 桌面悬浮球（鼠标入口）：56x56 透明无边框、alwaysOnTop、不抢焦点（focusable:false，
 // 保证 readSelection 的 SendKeys Ctrl+C 仍作用于原前台程序）、不出现在任务栏。
+// 唯一例外：右键菜单打开期间临时可聚焦（否则窗口永远收不到 Esc / blur，菜单关不掉），
+// 菜单一关立刻回到 focusable:false，见 applyFocusable / handleMenu。
 // 页面加载顺序：dist/renderer/floatball.html（打包后）优先，public/floatball.html（开发态）兜底。
 // IPC 由 ipc.js 统一注册，本模块只提供处理函数；任何失败都不能拖垮主进程。
 'use strict';
@@ -40,6 +42,9 @@ let getMainWindowFn = null;
 let getStateFn = null;
 // 右键菜单打开期间的窗口备份（菜单关闭后恢复球体尺寸与原位置）
 let menuBackup = null;
+// 右键菜单是否展开。只有展开期间窗口才临时可聚焦——这是 blur/Esc 能收到的前提；
+// 关闭后必须立刻恢复 focusable:false，否则球会长期占据前台、吞掉用户的键盘输入。
+let menuActive = false;
 
 function floatBallHtmlPath() {
   const candidates = [
@@ -126,6 +131,9 @@ function createBall() {
   } catch (e) {
     /* 旧平台不支持时忽略 */
   }
+  // 新窗口一律从「不可聚焦、无菜单」开始（dispose 后重建不能残留旧状态）
+  menuActive = false;
+  menuBackup = null;
   ballWin.setPosition(pos.x, pos.y);
   ballWin.loadFile(html).catch((e) => {
     console.error('[floatball] load failed:', e && e.message);
@@ -206,6 +214,9 @@ function setEnabled(on) {
         broadcastState();
       }
     } else if (ballWin && !ballWin.isDestroyed()) {
+      // 菜单还开着就隐藏：先把扩大的窗口与临时焦点收回去，否则下次显示会留下一个
+      // 205x392 的透明空挡板（会吞掉桌面上的点击）
+      if (menuActive || menuBackup) handleMenu({ open: false });
       ballWin.hide();
     }
   } catch (e) {
@@ -216,7 +227,8 @@ function setEnabled(on) {
 /** 托盘菜单用：可见则隐藏，否则显示 */
 function toggle() {
   try {
-    if (ballWin && !ballWin.isDestroyed() && ballWin.isVisible()) ballWin.hide();
+    // 走 setEnabled(false) 而不是裸 hide()：隐藏前要顺带收回菜单留下的 focusable
+    if (ballWin && !ballWin.isDestroyed() && ballWin.isVisible()) setEnabled(false);
     else setEnabled(true);
   } catch (e) {
     console.error('[floatball] toggle failed:', e && e.message);
@@ -255,6 +267,7 @@ function dispose() {
   ballWin = null;
   dragOrigin = null;
   menuBackup = null;
+  menuActive = false;
 }
 
 /** 向球窗口广播状态 {isPlaying, buffering, hotkey, hotkeyOk} */
@@ -281,9 +294,39 @@ function broadcastState() {
 }
 
 /**
+ * 临时切换窗口可聚焦（右键菜单专用，W-FIX3）。
+ *
+ * 背景：球窗口常驻 focusable:false，窗口永远拿不到焦点 → 渲染层的
+ * `window.addEventListener('blur', closeMenu)` 是死代码、Esc 也进不来，
+ * 用户点桌面/别的程序时菜单收不回去。
+ *
+ * 因此菜单打开时 setFocusable(true)+focus()，让 blur/Esc 真正可达；
+ * 关闭时先 blur() 把前台还给用户原来的窗口（划词 Ctrl+C 依赖它），再 setFocusable(false)。
+ * 只改 WS_EX_NOACTIVATE，不销毁/重建窗口 —— transparent 窗口重建会闪。
+ */
+function applyFocusable(on) {
+  if (!ballWin || ballWin.isDestroyed()) return;
+  try {
+    if (on) {
+      ballWin.setFocusable(true);
+      ballWin.focus();
+    } else {
+      try {
+        if (ballWin.isFocused()) ballWin.blur();
+      } catch (e) {
+        /* 非 Windows/旧版本没有 blur 时忽略 */
+      }
+      ballWin.setFocusable(false);
+    }
+  } catch (e) {
+    console.error('[floatball] applyFocusable failed:', e && e.message);
+  }
+}
+
+/**
  * v2.3 右键菜单窗口扩容：球窗口只有 56x56，直接弹菜单会被裁切。
  * 菜单打开时把窗口临时放大到菜单尺寸（锚定球右侧，空间不足翻转到左侧），
- * 关闭时恢复球体大小与位置。focusable 保持 false，不抢编辑焦点。
+ * 关闭时恢复球体大小与位置，并立刻收回可聚焦状态（focusable:false）。
  */
 function handleMenu(payload) {
   try {
@@ -304,13 +347,20 @@ function handleMenu(payload) {
       let ny = b.y - 4;
       ny = Math.min(Math.max(ny, wa.y), Math.max(wa.y, wa.y + wa.height - h));
       ballWin.setBounds({ x: nx, y: ny, width: w, height: h }, false);
-    } else if (menuBackup) {
-      const target = dragOrigin || menuBackup;
-      ballWin.setBounds(
-        { x: target[0] !== undefined ? target[0] : target.x, y: target[1] !== undefined ? target[1] : target.y, width: ballSize(), height: ballSize() },
-        false,
-      );
-      menuBackup = null;
+      // 先扩窗再夺焦：菜单与窗口尺寸已定型，焦点落上去不会随 resize 抖动
+      menuActive = true;
+      applyFocusable(true);
+    } else if (menuActive || menuBackup) {
+      if (menuBackup) {
+        const target = dragOrigin || menuBackup;
+        ballWin.setBounds(
+          { x: target[0] !== undefined ? target[0] : target.x, y: target[1] !== undefined ? target[1] : target.y, width: ballSize(), height: ballSize() },
+          false,
+        );
+        menuBackup = null;
+      }
+      menuActive = false;
+      applyFocusable(false);
     }
   } catch (e) {
     console.error('[floatball] menu resize failed:', e && e.message);
@@ -327,7 +377,11 @@ async function handleCmd(payload) {
     }
     if (cmd === 'hide') {
       // 菜单「隐藏悬浮球」：隐藏窗口；恢复走托盘「显示/隐藏悬浮球」或设置开关
-      if (ballWin && !ballWin.isDestroyed()) ballWin.hide();
+      if (ballWin && !ballWin.isDestroyed()) {
+        // 同 setEnabled(false)：先收回菜单留下的扩大窗口与 focusable
+        if (menuActive || menuBackup) handleMenu({ open: false });
+        ballWin.hide();
+      }
       console.log('[floatball] hidden by context menu');
       return;
     }
@@ -404,6 +458,9 @@ function handleDragEnd() {
     console.error('[floatball] dragEnd persist failed:', e && e.message);
   } finally {
     dragOrigin = null;
+    // 拖拽全程不需要焦点；结束时会话已散，只要菜单没开就立刻收回可聚焦状态，
+    // 防止球继续占着前台、挡住别的程序的键盘输入。
+    if (!menuActive) applyFocusable(false);
   }
 }
 

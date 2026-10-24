@@ -1,0 +1,38 @@
+PASS  A0 初始：窗口 focusable=false（不抢前台）
+PASS  A1 菜单打开 → 主进程 setFocusable(true)   |  calls=[true]
+PASS  A1 菜单打开 → 主进程 focus() 被调用   |  focusCount=1
+PASS  A1 菜单打开 → 窗口扩到菜单尺寸   |  {"x":960,"y":596,"width":192,"height":280}
+PASS  A2 菜单关闭 → 主进程 setFocusable(false)   |  calls=[false]
+PASS  A2 菜单关闭 → 先把焦点还回去（blur 1 次）   |  blur=1
+PASS  A2 菜单关闭 → 窗口收回球体尺寸   |  {"x":900,"y":600,"width":56,"height":56}
+PASS  A3 重复 close 幂等（不再动窗口/焦点）
+PASS  A4 拖拽：窗口跟随（setPosition 有更新）   |  pos=[930,612]
+PASS  A4 拖拽结束 → focusable 仍为 false
+PASS  A4 拖拽不触发 read   |  readCalls=0
+PASS  A4 拖拽不夺焦（focus 未被调用）
+PASS  A5 菜单里「隐藏悬浮球」→ focusable=false 且窗口隐藏
+PASS  A5 隐藏前已收回扩大窗口（不留透明挡板）   |  {"x":930,"y":612,"width":56,"height":56}
+PASS  A5b 托盘 toggle 隐藏 → focusable=false 且窗口隐藏
+PASS  A5b 托盘隐藏前已收回扩大窗口   |  {"x":930,"y":612,"width":56,"height":56}
+PASS  B1 右键 → 菜单 DOM 出现
+PASS  B1 右键 → 主进程收到 setFocusable(true)   |  calls=[true]
+PASS  B1 右键 → 主进程 focus() 被调用   |  focusCount=1
+PASS  B1 右键 → 窗口已扩大（菜单不被裁切）   |  {"x":990,"y":608,"width":205,"height":392}
+PASS  B2 window.blur → 菜单 DOM 消失
+PASS  B2 window.blur → 主进程收到 setFocusable(false)   |  calls=[false]
+PASS  B2 window.blur → 主进程收到 menu:false
+PASS  B2 window.blur → 窗口收回球体尺寸   |  {"x":930,"y":612,"width":56,"height":56}
+PASS  B3 Esc → 菜单 DOM 消失
+PASS  B3 Esc → 主进程收到 setFocusable(false)
+PASS  B4 再点一次球 → 菜单 DOM 消失
+PASS  B4 再点一次球 → 主进程收到 setFocusable(false)
+PASS  B5 菜单项点击 → 菜单 DOM 消失
+PASS  B5 菜单项点击 → 主进程收到 setFocusable(false)
+PASS  B5 菜单项点击 → 指令仍送达（cmd=play）
+PASS  B5 顺序正确：先 menu:false 再 cmd   |  menuOff=1 play=2
+PASS  B6 拖拽未被吞（dragMove>5px + dragEnd 都到主进程）
+PASS  B6 拖拽结束 → 主进程 focusable 仍为 false
+PASS  B6 拖拽后没有触发 read   |  readCalls +0
+PASS  B6 拖拽全程没夺焦
+
+RESULT: ALL PASS 36/36

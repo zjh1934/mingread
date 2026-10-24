@@ -5,9 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>朗读女 Neo · 选中文字按 F1 即读</title>
+    <!--
+      WFIX2 首屏骨架：纯内联、无外部依赖，所以在 bundle 解析前就能上屏。
+      底色 #f5f6fa = src/renderer/theme.js 浅色主题 background.default，
+      与主进程 BrowserWindow.backgroundColor 同色 —— 「窗口可见 → React 挂载」之间不出现色差闪变。
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #f5f6fa;
+        color: #161b26;
+      }
+      #ldn-boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: #f5f6fa;
+        font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", system-ui,
+          -apple-system, sans-serif;
+        text-align: center;
+        z-index: 1;
+      }
+      #ldn-boot .ldn-boot-title {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      #ldn-boot .ldn-boot-sub {
+        font-size: 18px;
+        line-height: 1.7;
+        color: #4a5261;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="ldn-boot" role="status" aria-live="polite">
+      <div class="ldn-boot-title">朗读女 Neo</div>
+      <div class="ldn-boot-sub">正在启动…</div>
+    </div>
+    <script>
+      // React 挂载出内容后立刻移除骨架（骨架只遮「空白首帧」，不能停留遮挡真实界面）。
+      (function () {
+        var boot = document.getElementById('ldn-boot');
+        var root = document.getElementById('root');
+        if (!boot || !root) return;
+        var remove = function () {
+          if (boot.parentNode) boot.parentNode.removeChild(boot);
+        };
+        if (typeof MutationObserver === 'function') {
+          var mo = new MutationObserver(function () {
+            if (root.childElementCount > 0) {
+              mo.disconnect();
+              remove();
+            }
+          });
+          mo.observe(root, { childList: true });
+        }
+        // 兜底：15s 后无论 React 是否挂载都撤掉骨架，避免永久遮挡
+        setTimeout(remove, 15000);
+      })();
+    </script>
     <script type="module" src="/src/renderer/main.jsx"></script>
   </body>
 </html>
