@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { AppBar, Toolbar, Typography, Stack, Box, ButtonBase, IconButton, Tooltip, Divider, CircularProgress } from '@mui/material';
 import { GraphicEq, Settings as SettingsIcon, DarkMode, LightMode, Contrast } from '@mui/icons-material';
 // α-视觉增强：px → rem，字号随档位缩放（禁止再写死 fontSize: 13 这类数字）
 import { fs, su } from '../theme';
 import announcer from '../services/announcer';
+import WindowControls from './WindowControls';
+
+// W-WIN1：窗口是无边框的（frame:false），整条 TopBar 就是标题栏。
+// 所以根容器是拖拽区（drag），里面每个可交互元素必须 no-drag，否则点击会被拖动吞掉。
+const NO_DRAG = { WebkitAppRegion: 'no-drag' };
 
 // 状态灯：实心圆点=可用，空心圆环=不可用（形状冗余，色弱可辨）；点击重试
 // v2.4.0：本地引擎就绪时不能再叫「在线」——那时根本没有联网。按 engine.online 区分：
@@ -31,6 +36,7 @@ function StatusDot({ status, refreshing, onRefresh }) {
           gap: 0.75,
           border: '1px solid',
           borderColor: 'divider',
+          ...NO_DRAG,
           '&:hover': { borderColor: ready ? 'success.main' : 'error.main' },
         }}
       >
@@ -86,14 +92,45 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
     else announcer.announce('themeChanged', { themeMode: nextMode });
   };
 
+  // 双击拖拽区最大化/还原：frame:false 的窗口不会自动处理双击标题栏，必须自己接。
+  // 点在按钮/状态灯上不触发（那些位置有明确动作，双击不该顺带改窗口状态）。
+  const handleBarDoubleClick = useCallback((e) => {
+    const t = e && e.target;
+    if (t && typeof t.closest === 'function' && t.closest('button,a,input,[role="button"]')) return;
+    try {
+      const api = window.langdu;
+      if (api && typeof api.toggleMaximizeWindow === 'function') api.toggleMaximizeWindow();
+    } catch (err) {
+      /* 无桥（纯浏览器调试）时忽略 */
+    }
+  }, []);
+
   return (
     <AppBar
       position="static"
       elevation={0}
       color="transparent"
-      sx={{ bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}
+      onDoubleClick={handleBarDoubleClick}
+      sx={{
+        // 整条顶栏 = 标题栏。用户诉求「最上面一层颜色要和 UI 融为一体」：
+        // 底色从 background.paper（比内容区亮一档）改为 background.default，**与内容区完全同色**，
+        // 并去掉 1px borderBottom —— 顶栏不再是「另一层」，而是页面的一部分（Win11 同色标题栏的做法）。
+        // 三个控制键靠自身的 hover 底色和左侧 divider 区分，不需要整条栏的色差来框定。
+        bgcolor: 'background.default',
+        flexShrink: 0,
+        WebkitAppRegion: 'drag',
+        userSelect: 'none',
+      }}
     >
-      <Toolbar sx={{ gap: 1.5, minHeight: { xs: 56, md: 64 }, px: { xs: 1.5, md: 2.5 } }}>
+      <Toolbar
+        disableGutters
+        sx={{
+          gap: 1.5,
+          minHeight: { xs: 56, md: 64 },
+          pl: { xs: 1.5, md: 2.5 },
+          pr: 0, // 控制键贴到窗口右边缘（Windows 惯例），顶栏本身留白由左内边距承担
+        }}
+      >
         <Box
           sx={{
             // 同上：2.0x 档 height 会被 index.css 的 !important 规则抹掉，用 aspect-ratio 保正方形
@@ -124,7 +161,7 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
           >
             {/* v2.4.0：副标题不再重复「按 F1 即读」与音色（首屏状态卡已讲清楚），
                 这里只留产品定位，避免同一信息在首屏出现三次 */}
-            低视力无障碍朗读工具
+            无障碍朗读工具
           </Typography>
         </Box>
 
@@ -134,15 +171,22 @@ export default function TopBar({ status, themeMode, refreshing, onToggleTheme, o
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
 
         <Tooltip title={`${THEME_NEXT_LABEL[themeMode] || '切换主题'}（当前：${THEME_LABEL[themeMode] || themeMode}）`}>
-          <IconButton onClick={toggleTheme} aria-label={`切换主题，当前${THEME_LABEL[themeMode] || themeMode}`}>
+          <IconButton
+            onClick={toggleTheme}
+            aria-label={`切换主题，当前${THEME_LABEL[themeMode] || themeMode}`}
+            sx={NO_DRAG}
+          >
             <ThemeToggleIcon mode={themeMode} />
           </IconButton>
         </Tooltip>
         <Tooltip title="设置">
-          <IconButton onClick={onOpenSettings} aria-label="设置">
+          <IconButton onClick={onOpenSettings} aria-label="设置" sx={NO_DRAG}>
             <SettingsIcon sx={{ fontSize: fs(20) }} />
           </IconButton>
         </Tooltip>
+
+        <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+        <WindowControls />
       </Toolbar>
     </AppBar>
   );

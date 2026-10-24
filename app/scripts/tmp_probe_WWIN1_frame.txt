@@ -1,0 +1,123 @@
+=== W-WIN1 窗口融合探针 ===
+electron=32.3.3 chrome=128.0.6613.186 node=20.18.1
+PASS  A0 真实 bootstrap 已跑起来（拿到主窗口）
+PASS  A1 Menu.getApplicationMenu() === null（无英文菜单）
+
+[options] {"frame":false,"thickFrame":true}
+PASS  B1 构造参数 frame === false
+PASS  B2 titleBarStyle 未设置（Windows 不需要 traffic light 语义）
+PASS  B3 thickFrame 保留 true（边缘缩放 / Aero Snap 依赖）
+[对照] 有边框窗口 bounds.h=420 contentBounds.h=381 差值=39px
+PASS  B4 主窗口无边框（bounds 与 contentBounds 完全相等，无标题栏占位）   |  bounds=1180x800 content=1180x800（有边框对照组差值 39px）
+PASS  B5 窗口仍可缩放 / 可最大化（thickFrame 生效）
+PASS  C0 IPC 注册幂等（bootstrap 已注册；探针再调两次都返回 false 且不抛）   |  first=false again=false
+PASS  C1 minimize 打的是「发送方窗口」（other 最小化、主窗口不受影响）   |  otherMin=true winMin=false
+PASS  C2 toggleMaximize 第一次 → 最大化   |  isMaximized=true
+PASS  C3 toggleMaximize 第二次 → 还原（同一个键双向）   |  isMaximized=false
+PASS  C4 isMaximized handler 与真实状态一致
+PASS  C5 无 sender 时安全返回（不崩、不打到主窗口）
+PASS  C6 close 只关闭目标窗口（other 已销毁，主窗口还在）
+PASS  D1 maximize → 渲染层收到 window:maximized-changed(true)   |  [{"ch":"window:maximized-changed","payload":true}]
+PASS  D2 unmaximize → 渲染层收到 window:maximized-changed(false)   |  [{"ch":"window:maximized-changed","payload":true},{"ch":"window:maximized-changed","payload":false}]
+[对照] 有边框窗口最大化 bounds=-8,-8 1936x1056
+[screen] bounds=1920x1080 workArea=0,0 1920x1040 scale=1
+[maximized] 无边框 -8,-8 1936x1056
+PASS  E1 无边框最大化 bounds 与有边框窗口完全一致（同一条系统最大化路径）   |  frameless=-8,-8,1936,1056 framed=-8,-8,1936,1056
+PASS  E2 最大化后底边不越过屏幕（任务栏区域仍在窗口之外）   |  底边=1048 屏幕=1080 工作区底边=1040
+
+[dom] {
+  "hasBar": true,
+  "barRegion": "drag",
+  "barBg": "rgb(255, 255, 255)",
+  "barShadow": "none",
+  "barRect": {
+    "x": 0,
+    "y": 0,
+    "w": 1180,
+    "h": 65,
+    "cx": 590,
+    "cy": 32.5
+  },
+  "dpr": 1,
+  "bridge": {
+    "minimizeWindow": "function",
+    "toggleMaximizeWindow": "function",
+    "closeWindow": "function",
+    "isWindowMaximized": "function",
+    "onWindowMaximizedChanged": "function"
+  },
+  "controls": [
+    {
+      "label": "最小化",
+      "region": "no-drag",
+      "x": 1048,
+      "y": 10,
+      "w": 44,
+      "h": 44,
+      "cx": 1070,
+      "cy": 32
+    },
+    {
+      "label": "最大化",
+      "region": "no-drag",
+      "x": 1092,
+      "y": 10,
+      "w": 44,
+      "h": 44,
+      "cx": 1114,
+      "cy": 32
+    },
+    {
+      "label": "关闭",
+      "region": "no-drag",
+      "x": 1136,
+      "y": 10,
+      "w": 44,
+      "h": 44,
+      "cx": 1158,
+      "cy": 32
+    }
+  ],
+  "settings": {
+    "region": "no-drag",
+    "x": 979,
+    "y": 10,
+    "w": 44,
+    "h": 44,
+    "cx": 1001,
+    "cy": 32
+  },
+  "status": {
+    "text": "本地语音",
+    "region": "no-drag",
+    "x": 805.59375,
+    "y": 15.15625,
+    "w": 92.40625,
+    "h": 33.6875,
+    "cx": 851.796875,
+    "cy": 32
+  }
+}
+PASS  F1 TopBar 根容器为拖拽区（-webkit-app-region: drag）   |  region=drag
+PASS  F2 TopBar 无阴影且与内容区同底色（不分层）   |  bg=rgb(255, 255, 255) shadow=none
+PASS  F3 三个控制键都在（最小化 / 最大化 / 关闭）   |  最小化,最大化,关闭
+PASS  F4 每个控制键 44×44   |  最小化:44x44 最大化:44x44 关闭:44x44
+PASS  F5 控制键均为 no-drag（不会被拖拽吞掉）   |  最小化:no-drag 最大化:no-drag 关闭:no-drag
+PASS  F6 设置键为 no-drag   |  region=no-drag
+PASS  F7 状态灯为 no-drag   |  region=no-drag
+PASS  F8 preload 五项窗口控制 API 全部暴露   |  {"minimizeWindow":"function","toggleMaximizeWindow":"function","closeWindow":"function","isWindowMaximized":"function","onWindowMaximizedChanged":"function"}
+PASS  F9 顶栏只占一行（高度 ≈ 56/64 + 无第二行菜单区）   |  h=65
+PASS  F10 点击 TopBar 上的设置键 → 设置对话框打开   |  via=sendInputEvent
+PASS  F19 关闭键 hover → error.main 底 + 白图标   |  {"bg":"rgb(217, 52, 74)","color":"rgb(255, 255, 255)"}
+PASS  F20 失焦时顶栏不变灰（配色与聚焦时一致）   |  rgb(255, 255, 255) -> rgb(255, 255, 255)
+[focus] {"active":"probe-ta","hasFocus":true,"sel":[0,10]}
+PASS  F11 Ctrl+C 复制生效（不依赖菜单）   |  clipboard="W-WIN1 快捷键"
+PASS  F12 Ctrl+V 粘贴生效   |  value="W-WIN1 快捷键"
+PASS  F13 Ctrl+A 全选生效
+PASS  F14 Ctrl+X 剪切生效   |  value=""
+PASS  F15 Ctrl+Z 撤销生效（撤销上一步剪切）   |  value="W-WIN1 快捷键"
+PASS  F16 端到端 toggleMaximizeWindow 改变的是本窗口   |  before=false after=true
+PASS  F17 端到端 isWindowMaximized 返回值与主进程一致   |  renderer=true main=true
+PASS  F18 再次切换回还原态   |  renderer=false main=false
+
+RESULT: ALL PASS 38/38

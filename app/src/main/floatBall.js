@@ -40,6 +40,7 @@ let ballWin = null;
 let dragOrigin = null;
 let getMainWindowFn = null;
 let getStateFn = null;
+let ensureWindowFn = null;
 // 右键菜单打开期间的窗口备份（菜单关闭后恢复球体尺寸与原位置）
 let menuBackup = null;
 // 右键菜单是否展开。只有展开期间窗口才临时可聚焦——这是 blur/Esc 能收到的前提；
@@ -187,10 +188,11 @@ function applySettingsPatch(patch) {
  * @param {() => import('electron').BrowserWindow|null} getWindow 主窗口获取器
  * @param {() => {playback:{isPlaying:boolean,buffering:boolean,hasAudio:boolean}, hotkey:string, hotkeyOk:boolean}} getState
  */
-function initFloatBall(getWindow, getState) {
+function initFloatBall(getWindow, getState, ensureWindow) {
   try {
     getMainWindowFn = getWindow;
     getStateFn = getState;
+    ensureWindowFn = typeof ensureWindow === 'function' ? ensureWindow : null;
     let enabled = true;
     try {
       enabled = getSettings().floatBallEnabled !== false;
@@ -368,6 +370,24 @@ function handleMenu(payload) {
 }
 
 /** floatBall:cmd 载荷：{cmd:'read'|'play'|'pause'|'stop'|'prev'|'next'|'zoomIn'|'zoomOut'|'zoomExit'|'zoomPause'|'menu'|'hide', ...} */
+
+/** 取一个可投递的窗口；真被销毁时尝试重建。
+ *  历史 bug：主窗口被叉掉后 mainWindow=null，球的点击指令 `if (win) send` 静默丢弃 ——
+ *  用户感觉「球点了没反应、图标还一直不变」。 */
+function resolveWindow() {
+  const w = typeof getMainWindowFn === 'function' ? getMainWindowFn() : null;
+  if (w && !w.isDestroyed()) return w;
+  if (ensureWindowFn) {
+    try {
+      const nw = ensureWindowFn();
+      if (nw && !nw.isDestroyed()) return nw;
+    } catch (e) {
+      console.warn('[floatball] ensureWindow failed:', e && e.message);
+    }
+  }
+  return null;
+}
+
 async function handleCmd(payload) {
   const cmd = typeof payload === 'string' ? payload : payload && payload.cmd;
   try {
@@ -389,12 +409,22 @@ async function handleCmd(payload) {
       // 与热键同规格：入口第一行即出反馈音（基线指标 E，≤200ms 让用户知道「指令已收到」）
       try { a11y.cue('press'); } catch (_) { /* 反馈音失败不阻塞朗读 */ }
       const r = await readSelection();
-      const win = typeof getMainWindowFn === 'function' ? getMainWindowFn() : null;
-      if (win && !win.isDestroyed()) {
+      const win = resolveWindow();
+      if (win) {
         // 与全局热键完全同路：hotkey:read-selection {text, source}
         win.webContents.send('hotkey:read-selection', { text: r.text, source: r.source });
+      } else {
+        // 不许静默：球点了但送不出去，必须说明（否则用户以为软件坏了）
+        try {
+          a11y.announce({
+            text: '主窗口已关闭，朗读送不出去。请右键任务栏右下角的朗读女图标，选择「显示主窗口」。',
+            priority: 'high',
+          });
+        } catch (e) {
+          /* 播报失败至少留日志 */
+        }
       }
-      console.log(`[floatball] click -> source=${r.source} len=${(r.text || '').length} tookMs=${r.tookMs}`);
+      console.log(`[floatball] click -> source=${r.source} len=${(r.text || '').length} tookMs=${r.tookMs} delivered=${!!win}`);
       return;
     }
     // v2.3 屏幕缩放指令：zoomIn/zoomOut/zoomExit/zoomPause（控制器未就绪则忽略）
@@ -412,9 +442,15 @@ async function handleCmd(payload) {
       return;
     }
     if (PLAYBACK_CMDS.indexOf(cmd) !== -1) {
-      const win = typeof getMainWindowFn === 'function' ? getMainWindowFn() : null;
-      if (win && !win.isDestroyed()) {
+      const win = resolveWindow();
+      if (win) {
         win.webContents.send('playback:cmd', { cmd });
+      } else {
+        try {
+          a11y.announce({ text: '主窗口已关闭，播放指令没有送达。', priority: 'high' });
+        } catch (e) {
+          /* noop */
+        }
       }
       return;
     }

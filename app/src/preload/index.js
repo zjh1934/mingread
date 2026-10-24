@@ -6,6 +6,20 @@ const { contextBridge, ipcRenderer } = require('electron');
 const api = {
   appInfo: () => ipcRenderer.invoke('app:info'),
 
+  // W-WIN1 无边框窗口控制：顶栏右侧自绘的三个键（最小化/最大化-还原/关闭）。
+  // 主进程用 BrowserWindow.fromWebContents(e.sender) 定位窗口，只作用于调用方窗口；
+  // closeWindow 仅关闭该窗口，不退出应用（托盘常驻逻辑不受影响）。
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  isWindowMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  /** 最大化状态推送（主进程 maximize/unmaximize 双向同步：Win+↑、双击、Aero Snap 都能收到） */
+  onWindowMaximizedChanged: (cb) => {
+    const listener = (_e, v) => cb(!!v);
+    ipcRenderer.on('window:maximized-changed', listener);
+    return () => ipcRenderer.removeListener('window:maximized-changed', listener);
+  },
+
   // 音色与合成
   getVoices: () => ipcRenderer.invoke('tts:listVoices'),
   splitSentences: (text) => ipcRenderer.invoke('tts:splitSentences', { text }),

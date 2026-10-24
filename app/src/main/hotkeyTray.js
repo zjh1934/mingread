@@ -59,13 +59,56 @@ function trayIcon() {
  * @param {() => string} getHotkey 例如 'Ctrl+Alt+R'
  * @param {() => void} [toggleFloatBall] 显示/隐藏悬浮球（由 index.js 注入 floatBall.toggle）
  */
-function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
+function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall, ensureWindow) {
   let tray = null;
   let busy = false;
   let registered = false;
   let disposed = false;
   /** 本模块自己注册成功的朗读热键；只注销它，绝不动别人（缩放）的热键 */
   let registeredAccel = '';
+
+  /** 取一个**可用**的主窗口：优先现有窗口（隐藏态也能 show 回来），
+   *  真被销毁时调 ensureWindow 重建。返回 null 表示连重建都失败。 */
+  function resolveWindow() {
+    const w = getWindow();
+    if (w && !w.isDestroyed()) return w;
+    if (typeof ensureWindow === 'function') {
+      try {
+        const nw = ensureWindow();
+        if (nw && !nw.isDestroyed()) return nw;
+      } catch (e) {
+        console.warn('[hotkey] ensureWindow failed:', e && e.message);
+      }
+    }
+    return null;
+  }
+
+  /** 托盘点击 / 菜单「显示主窗口」的唯一入口：恢复、置顶、聚焦 */
+  function showMainWindow() {
+    const w = resolveWindow();
+    if (!w) {
+      // 连重建都失败：必须让用户知道，不能点了没反应
+      try {
+        a11y.announce({
+          text: '主窗口已关闭且无法重新打开，请从开始菜单重新启动朗读女。',
+          priority: 'high',
+        });
+      } catch (e) {
+        /* 播报失败时至少留日志 */
+      }
+      console.error('[hotkey] showMainWindow: no window available');
+      return false;
+    }
+    try {
+      if (w.isMinimized()) w.restore();
+      w.show();
+      w.focus();
+    } catch (e) {
+      console.warn('[hotkey] showMainWindow failed:', e && e.message);
+      return false;
+    }
+    return true;
+  }
 
   /** 热键按下的即时反馈（v2.4.0 起默认关闭，见 settingsStore.hotkeyCue） */
   function firePressCue(t0) {
@@ -104,12 +147,27 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     }
     busy = true;
     try {
-      const win = getWindow();
+      // 关键：先确认有窗口能接收结果，否则抓完选区才丢弃（用户只听到提示音、毫无说明）。
+      // 这条路径曾经就是这么静默 return 的 —— 用户原话「按热键它不出来，就低一下，也不说一下」。
+      const target = resolveWindow();
+      if (!target) {
+        a11y.announce({
+          text: '没有可以朗读的窗口。请右键任务栏右下角的朗读女图标，选择「显示主窗口」。',
+          priority: 'high',
+        });
+        console.warn('[hotkey] read skipped: no window to deliver result');
+        return;
+      }
       // 抓选区期间（发 Ctrl+C → 读完还原）抑制复制即读，否则监视器会把选区内容和
       // 还原后的旧剪贴板当成连续两次复制，造成重复朗读（含旧剪贴板误读）
       suppressAutoRead(1500);
       const r = await readSelection();
-      if (!win || win.isDestroyed()) return;
+      // 抓选区要几百毫秒，这期间窗口可能被关 —— 重新取一次，别拿旧引用
+      const win = resolveWindow();
+      if (!win) {
+        a11y.announce({ text: '主窗口已关闭，这次朗读没有送达。', priority: 'high' });
+        return;
+      }
       // v2.3：整包透传（多出 code/message/stale），上层据此播报"未获取到选区"或"这是剪贴板内容"
       win.webContents.send('hotkey:read-selection', { ...r });
       console.log(
@@ -177,8 +235,8 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
       {
         label: '朗读剪贴板',
         click: () => {
-          const w = getWindow();
-          if (w && !w.isDestroyed()) w.webContents.send('hotkey:read-clipboard');
+          const w = resolveWindow();
+          if (w) w.webContents.send('hotkey:read-clipboard');
         },
       },
     ];
@@ -203,13 +261,7 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
       { type: 'separator' },
       {
         label: '显示主窗口',
-        click: () => {
-          const w = getWindow();
-          if (w) {
-            w.show();
-            w.focus();
-          }
-        },
+        click: () => showMainWindow(),
       },
       { type: 'separator' },
       { label: '退出', click: () => app.quit() }
@@ -222,11 +274,9 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
     tray.setContextMenu(buildMenu());
     tray.setToolTip(`朗读女 Neo · 选中文字按 ${getHotkey() || DEFAULT_HOTKEY} 朗读`);
     tray.on('click', () => {
-      const w = getWindow();
-      if (w) {
-        w.show();
-        w.focus();
-      }
+      // 左键单击 = 恢复主窗口。窗口被 hide 到托盘时，这是用户唯一的「找回来」入口，
+      // 所以绝对不能静默失败（见 showMainWindow 的兜底播报）。
+      showMainWindow();
     });
   } catch (e) {
     console.error('[hotkey] tray init failed:', e && e.message);
@@ -370,9 +420,25 @@ function registerHotkeyTray(getWindow, getHotkey, toggleFloatBall) {
   };
   register();
 
+  /** 首次「关窗到托盘」时说明一次。
+   *  用系统气泡而不是语音播报：此时用户可能正在听朗读，语音会打断；气泡不抢音频。 */
+  function showTrayHint() {
+    if (!tray || tray.isDestroyed()) return;
+    try {
+      tray.displayBalloon({
+        title: '朗读女 Neo 仍在后台运行',
+        content: `按 ${getHotkey() || DEFAULT_HOTKEY} 照样能朗读。要重新打开窗口，单击这个图标；要彻底退出，右键图标选「退出」。`,
+      });
+    } catch (e) {
+      console.warn('[hotkey] tray balloon failed:', e && e.message);
+    }
+  }
+
   return {
     tray,
     reregister: register,
+    showMainWindow,
+    showTrayHint,
     isRegistered: () => registered || hookActive,
     /** 诊断用：钩子是否支持/激活/命中统计 */
     hookState: () => keyboardHook.getState(),
