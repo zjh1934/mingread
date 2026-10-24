@@ -35,7 +35,7 @@ export const useSettings = create(
 
       // ---- 系统设置（主进程权威，仅运行时同步，不持久化）----
       hotkey: 'F1',
-      clipboardAuto: false,
+      clipboardAuto: true,
       floatBallEnabled: true,
       hotkeyOk: undefined, // undefined=尚未同步；true=已注册；false=被占用
 
