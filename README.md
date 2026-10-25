@@ -75,7 +75,8 @@
 ## 系统要求
 
 - Windows 10 / 11 x64
-- 安装包与免安装 zip 都在 [Releases](https://github.com/zjh1934/mingread/releases/latest)：`MingRead-<版本>-setup.exe`（安装）或 `MingRead-<版本>-win-x64.zip`（免安装）
+- 安装包与免安装 zip 都在 [Releases](https://github.com/zjh1934/mingread/releases/latest)：
+  `MingRead-3.2.2-setup.exe`（安装）或 `MingRead-3.2.2-win-x64.zip`（免安装）
 
 ## 自己编译
 
@@ -85,6 +86,13 @@ npm install
 npm run dev      # 开发
 node node_modules/electron-builder/out/cli/cli.js --win nsis zip   # 打包
 ```
+
+## 屏幕放大（Alt + 滚轮）
+
+按住 `Alt` 滚动滚轮连续放大，鼠标下的内容不动；反向滚回 1 倍自动退出，`Ctrl+Alt+0` 随时退出。
+
+放大走的是 **Windows 自带的放大接口**（Magnification API）：系统直接把屏幕内容画进一个原生窗口，
+中间没有任何自绘、没有截图再缩放——所以不会出现「鼠标周围一圈圈方框」那类伪影。
 
 ## 两种朗读方式（首页一键切换）
 

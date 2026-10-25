@@ -21,10 +21,13 @@ if (!TOKEN) {
 
 // 目录与目标名：源文件用扩展名扫描定位，不在代码里写中文文件名
 // （Git Bash → node 传中文参数会丢字符，这也是上一轮资产名变成 "MingRead-2.4.0-.exe" 的原因）
-const SRC_DIR = path.resolve(__dirname, '..', 'release6');
+// 发版时用 RELEASE_DIR / RELEASE_ASSET_VER 覆盖，避免每次改源码
+const SRC_DIR = path.resolve(__dirname, '..', process.env.RELEASE_DIR || 'release6');
+const ASSET_VER = process.env.RELEASE_ASSET_VER || '2.4.0';
 const TARGETS = [
-  { ext: '.exe', name: 'MingRead-2.4.0-setup.exe' },
-  { ext: '.zip', name: 'MingRead-2.4.0-win-x64.zip' },
+  // 名称用纯 ASCII：Git Bash 传中文会丢字符（真实踩过，资产名变成 "MingRead-2.4.0-.exe"）
+  { ext: '.exe', name: `MingRead-${ASSET_VER}-setup.exe` },
+  { ext: '.zip', name: `MingRead-${ASSET_VER}-win-x64.zip` },
 ];
 
 function findSource(ext) {
